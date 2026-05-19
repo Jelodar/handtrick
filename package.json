@@ -1,0 +1,66 @@
+{
+  "name": "handtrick",
+  "version": "1.0.0",
+  "description": "Standalone intent-aware gesture runtime for pointer, touch, mouse, pen, pressure, and wheel input.",
+  "author": {
+    "name": "Reza Jelodar",
+    "url": "https://jelodar.com"
+  },
+  "main": "./handtrick.js",
+  "module": "./handtrick.mjs",
+  "types": "./index.d.ts",
+  "browser": "./handtrick.js",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "import": "./handtrick.mjs",
+      "require": "./handtrick.js",
+      "default": "./handtrick.js"
+    },
+    "./handtrick.js": "./handtrick.js",
+    "./handtrick.min.js": "./handtrick.min.js",
+    "./handtrick.mjs": "./handtrick.mjs",
+    "./index.d.ts": "./index.d.ts",
+    "./package.json": "./package.json"
+  },
+  "unpkg": "./handtrick.js",
+  "jsdelivr": "./handtrick.js",
+  "sideEffects": false,
+  "files": [
+    "handtrick.js",
+    "handtrick.min.js",
+    "handtrick.mjs",
+    "index.d.ts",
+    "README.md",
+    "LICENSE",
+    "demo",
+    "examples",
+    "test"
+  ],
+  "scripts": {
+    "minify": "terser handtrick.js -o handtrick.min.js -c toplevel,unsafe -m toplevel --comments '/HandTrick.js/'",
+    "build": "npm run minify",
+    "test": "node test/run.js",
+    "test:min": "TEST_MIN=1 node test/run.js"
+  },
+  "keywords": [
+    "gesture",
+    "touch",
+    "pointer",
+    "mouse",
+    "swipe",
+    "pinch",
+    "rotate",
+    "pan",
+    "tap",
+    "pressure",
+    "pointer-events"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "terser": "^5.31.0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

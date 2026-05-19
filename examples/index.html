@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>HandTrick Examples</title>
+<style>
+    * { box-sizing: border-box; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; min-height: 100%; background: #050505; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { padding: 22px; }
+    main { max-width: 1080px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; font-size: 16px; letter-spacing: 0.2em; }
+    p { margin: 0 0 18px; max-width: 760px; color: rgba(255,255,255,0.62); font-size: 13px; line-height: 1.6; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+    a { display: grid; gap: 10px; min-height: 142px; padding: 16px; border: 1px solid rgba(255,255,255,0.14); color: inherit; text-decoration: none; background: rgba(255,255,255,0.025); }
+    a:hover { border-color: rgba(10,132,255,0.72); }
+    b { font-size: 12px; letter-spacing: 0.14em; color: #0a84ff; }
+    span { color: rgba(255,255,255,0.72); font-size: 12px; line-height: 1.55; }
+    code { color: rgba(255,255,255,0.48); font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+</style>
+</head>
+<body>
+<main>
+    <h1>HANDTRICK EXAMPLES</h1>
+    <p>Start at Basic, then move toward richer routing, keyboard roles, conflict boundaries, threshold tuning, and the full workbench.</p>
+    <div class="grid">
+        <a href="./basic.html"><b>01 BASIC</b><span>Tap, swipe, region, fingers. Smallest useful surface.</span><code>new HandTrick(surface)</code></a>
+        <a href="./media.html"><b>02 MEDIA</b><span>One-line media preset, tap zones, swipe, pinch zoom.</span><code>new HandTrick(surface, 'media')</code></a>
+        <a href="./regions.html"><b>03 REGIONS</b><span>3x3 zones, halves, custom grid cells, start-region routing.</span><code>hand.on('tap', { region })</code></a>
+        <a href="./keyboard.html"><b>04 KEYBOARD</b><span>Alt/Ctrl fingers, Meta rolling, Shift modifier drag.</span><code>fingerSource: 'keyboard'</code></a>
+        <a href="./rolling.html"><b>05 ROLLING</b><span>Rolling tap versus simultaneous multi-touch.</span><code>rollingtap</code></a>
+        <a href="./sequences.html"><b>06 SEQUENCES</b><span>Exclusive tap chains and two-finger keyboard sequences.</span><code>tap&gt;tap&gt;swipe</code></a>
+        <a href="./path.html"><b>07 PATH</b><span>Held-pointer L-shapes and bare path definitions.</span><code>left&gt;down</code></a>
+        <a href="./rotate.html"><b>08 ROTATE</b><span>Continuous two-finger rotation with rebased angle output.</span><code>event.rotation</code></a>
+        <a href="./wheel.html"><b>09 WHEEL</b><span>Wheel zoom with normalized pixel, line, and page deltas.</span><code>wheelzoom</code></a>
+        <a href="./thresholds.html"><b>10 THRESHOLDS</b><span>Live tap, swipe, pinch, rotate, and path threshold tuning.</span><code>hand.setOptions(...)</code></a>
+        <a href="./advanced.html"><b>11 ADVANCED</b><span>Combined modifier, rolling, path, wheel, rotate, region, and sequence routing.</span><code>map + criteria</code></a>
+        <a href="../inspector/index.html"><b>12 WORKBENCH</b><span>Full event stream, payload inspection, event toggles, and live tuning.</span><code>HandTrick.groups</code></a>
+    </div>
+</main>
+</body>
+</html>

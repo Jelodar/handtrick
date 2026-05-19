@@ -1,0 +1,1077 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>HandTrick Workbench</title>
+<style>
+    * {
+        box-sizing: border-box;
+        -webkit-tap-highlight-color: transparent;
+        user-select: none;
+    }
+
+    html,
+    body {
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #050505;
+        color: #fff;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 360px;
+    }
+
+    button {
+        border: 1px solid rgba(255,255,255,0.18);
+        background: transparent;
+        color: #fff;
+        font: inherit;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        cursor: pointer;
+        min-height: 36px;
+    }
+
+    #surface {
+        position: relative;
+        overflow: hidden;
+        cursor: crosshair;
+        background:
+            linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
+            #050505;
+        background-size: 34px 34px;
+    }
+
+    #target {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: min(28vw, 170px);
+        height: min(28vw, 170px);
+        min-width: 112px;
+        min-height: 112px;
+        transform-origin: center;
+    }
+
+    #target-core {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        place-items: center;
+        border: 1px solid rgba(255,255,255,0.72);
+        background: rgba(10,132,255,0.08);
+        color: rgba(255,255,255,0.86);
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.2em;
+        text-align: center;
+        transform-origin: center;
+    }
+
+    #target.flash #target-core {
+        border-color: #30d158;
+        background: rgba(48,209,88,0.12);
+    }
+
+    #hud {
+        position: absolute;
+        left: 14px;
+        right: 14px;
+        top: 14px;
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 8px;
+        pointer-events: none;
+    }
+
+    .metric {
+        min-width: 0;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: rgba(0,0,0,0.35);
+        padding: 8px 10px;
+    }
+
+    .metric span {
+        display: block;
+        color: rgba(255,255,255,0.42);
+        font-size: 9px;
+        font-weight: 900;
+        letter-spacing: 0.14em;
+        white-space: nowrap;
+    }
+
+    .metric b {
+        display: block;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: rgba(255,255,255,0.92);
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1.45;
+        white-space: nowrap;
+    }
+
+    #guide {
+        position: absolute;
+        left: 14px;
+        right: 14px;
+        bottom: 14px;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        pointer-events: none;
+    }
+
+    .guide-cell {
+        border-top: 1px solid rgba(255,255,255,0.14);
+        padding-top: 8px;
+        color: rgba(255,255,255,0.58);
+        font-size: 10px;
+        font-weight: 750;
+        letter-spacing: 0.06em;
+        line-height: 1.35;
+    }
+
+    aside {
+        min-width: 0;
+        display: grid;
+        grid-template-rows: auto auto auto minmax(0, 1fr);
+        border-left: 1px solid rgba(255,255,255,0.1);
+        background: #080808;
+    }
+
+    .head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 14px;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .title {
+        min-width: 0;
+    }
+
+    .title h1 {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 900;
+        letter-spacing: 0.22em;
+    }
+
+    .title p {
+        margin: 6px 0 0;
+        color: rgba(255,255,255,0.48);
+        font-size: 11px;
+        line-height: 1.35;
+    }
+
+    .actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .summary {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1px;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .summary div {
+        padding: 10px 12px;
+        background: rgba(255,255,255,0.03);
+    }
+
+    .summary span {
+        display: block;
+        color: rgba(255,255,255,0.42);
+        font-size: 9px;
+        font-weight: 900;
+        letter-spacing: 0.14em;
+    }
+
+    .summary b {
+        display: block;
+        margin-top: 4px;
+        font-size: 13px;
+        font-weight: 850;
+    }
+
+    .tools {
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .filters,
+    .event-picks {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .tuning {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px 10px;
+    }
+
+    .scenarios {
+        display: grid;
+        gap: 6px;
+    }
+
+    .scenario {
+        display: grid;
+        grid-template-columns: 84px 1fr;
+        gap: 8px;
+        border-top: 1px solid rgba(255,255,255,0.08);
+        padding-top: 7px;
+        color: rgba(255,255,255,0.66);
+        font-size: 10px;
+        line-height: 1.35;
+    }
+
+    .scenario:first-child {
+        border-top: 0;
+        padding-top: 0;
+    }
+
+    .scenario b {
+        color: #0a84ff;
+        font-size: 9px;
+        letter-spacing: 0.12em;
+    }
+
+    .tune {
+        min-width: 0;
+    }
+
+    .tune label {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        color: rgba(255,255,255,0.52);
+        font-size: 9px;
+        font-weight: 900;
+        letter-spacing: 0.12em;
+    }
+
+    .tune b {
+        color: rgba(255,255,255,0.82);
+        font: 10px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .tune input {
+        width: 100%;
+        margin: 5px 0 0;
+        accent-color: #0a84ff;
+    }
+
+    .filters button,
+    .event-picks button {
+        min-height: 28px;
+        padding: 0 8px;
+        font-size: 10px;
+        letter-spacing: 0.08em;
+    }
+
+    .filters button.active,
+    .event-picks button.active {
+        border-color: rgba(10,132,255,0.72);
+        color: #0a84ff;
+    }
+
+    .search-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 6px;
+    }
+
+    #search {
+        min-width: 0;
+        height: 32px;
+        border: 1px solid rgba(255,255,255,0.18);
+        background: transparent;
+        color: #fff;
+        padding: 0 9px;
+        font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        outline: 0;
+    }
+
+    #events {
+        min-height: 0;
+        overflow: auto;
+    }
+
+    .event-row {
+        width: 100%;
+        display: grid;
+        grid-template-columns: minmax(70px, auto) 1fr;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 0;
+        border-bottom: 1px solid rgba(255,255,255,0.08);
+        background: transparent;
+        color: inherit;
+        text-align: left;
+        min-height: 56px;
+    }
+
+    .event-row:hover {
+        background: rgba(255,255,255,0.05);
+    }
+
+    .event-name {
+        color: #0a84ff;
+        font-size: 11px;
+        font-weight: 900;
+        letter-spacing: 0.08em;
+        overflow-wrap: anywhere;
+    }
+
+    .event-time {
+        margin-top: 4px;
+        color: rgba(255,255,255,0.38);
+        font: 10px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .event-count {
+        color: rgba(255,255,255,0.46);
+    }
+
+    .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 5px;
+        align-content: start;
+    }
+
+    .chip {
+        border: 1px solid rgba(255,255,255,0.14);
+        padding: 3px 5px;
+        color: rgba(255,255,255,0.8);
+        font-size: 10px;
+        font-weight: 800;
+        line-height: 1;
+        letter-spacing: 0.06em;
+    }
+
+    .chip.hot {
+        border-color: rgba(48,209,88,0.45);
+        color: #30d158;
+    }
+
+    .chip.warn {
+        border-color: rgba(255,159,10,0.45);
+        color: #ff9f0a;
+    }
+
+    #modal {
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        display: none;
+        grid-template-rows: auto minmax(0, 1fr);
+        background: rgba(0,0,0,0.92);
+    }
+
+    #modal.open {
+        display: grid;
+    }
+
+    .modal-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px;
+        border-bottom: 1px solid rgba(255,255,255,0.12);
+    }
+
+    #modal-title {
+        font-size: 12px;
+        font-weight: 900;
+        letter-spacing: 0.16em;
+    }
+
+    #modal-body {
+        margin: 0;
+        overflow: auto;
+        padding: 14px;
+        color: rgba(255,255,255,0.82);
+        font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        white-space: pre-wrap;
+        user-select: text;
+    }
+
+    @media (max-width: 900px) {
+        body {
+            grid-template-columns: 1fr;
+            grid-template-rows: minmax(0, 1fr) 70%;
+        }
+
+        aside {
+            border-left: 0;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .tools {
+            display: none;
+        }
+
+        body.tools-open .tools {
+            display: grid;
+        }
+
+        #hud {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+
+        #guide {
+            display: none;
+        }
+    }
+
+    @media (max-width: 520px) {
+        .head {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+        }
+
+        #hud {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+</style>
+</head>
+<body>
+    <main id="surface">
+        <div id="hud">
+            <div class="metric"><span>EVENT</span><b id="m-event">READY</b></div>
+            <div class="metric"><span>FINGERS</span><b id="m-fingers">0</b></div>
+            <div class="metric"><span>DIRECTION</span><b id="m-direction">none</b></div>
+            <div class="metric"><span>DELTA</span><b id="m-delta">0,0</b></div>
+            <div class="metric"><span>SCALE</span><b id="m-scale">1.00</b></div>
+            <div class="metric"><span>ROTATE</span><b id="m-rotation">0.0</b></div>
+            <div class="metric"><span>SOURCE</span><b id="m-source">pointer</b></div>
+            <div class="metric"><span>REGION</span><b id="m-region">center</b></div>
+        </div>
+        <div id="target"><div id="target-core">INSPECT</div></div>
+            <div id="guide">
+            <div class="guide-cell">Tap once, double tap, then try tap tap swipe right to see exclusive sequences and alias expansion</div>
+            <div class="guide-cell">Roll two or three fingers left/right like a table tap wave; close double taps stay normal taps</div>
+            <div class="guide-cell">Alt acts as two fingers. Ctrl acts as three. Meta-click chains emit rolling tap. Shift starts modifier drag.</div>
+            <div class="guide-cell">Draw down then right for a path. Pinch, twist, wheel, and inspect payload fields.</div>
+        </div>
+    </main>
+    <aside>
+        <div class="head">
+            <div class="title">
+                <h1>WORKBENCH</h1>
+                <p>Semantic event stream with common fields first.</p>
+            </div>
+            <div class="actions">
+                <button id="tools">TOOLS</button>
+                <button id="reset">RESET</button>
+                <button id="clear">CLEAR</button>
+            </div>
+        </div>
+        <div class="summary">
+            <div><span>STATE</span><b id="s-state">enabled</b></div>
+            <div><span>EVENTS</span><b id="s-count">0</b></div>
+            <div><span>CLAIM</span><b id="s-claim">no</b></div>
+        </div>
+        <div class="tools">
+            <div class="filters">
+                <button data-filter="intent" class="active">INTENT</button>
+                <button data-filter="base">BASE</button>
+                <button data-filter="detail">DETAIL</button>
+                <button data-filter="all">ALL</button>
+            </div>
+            <div class="search-row">
+                <input id="search" type="search" placeholder="filter">
+                <button id="group" class="active">GROUP</button>
+            </div>
+            <div class="event-picks" id="event-picks"></div>
+            <div class="scenarios">
+                <div class="scenario"><b>TAP</b><span>Tap center, double tap, then try a wider two-finger tap to compare against roll.</span></div>
+                <div class="scenario"><b>ROLL</b><span>Roll two or three fingers left/right with staggered downs. Meta-click two or three points in a line mirrors it on desktop.</span></div>
+                <div class="scenario"><b>SEQ</b><span>Tap, tap, swipe right. Try toggling doubletap&gt;swipe and tap&gt;swipe to inspect longest-match resolution.</span></div>
+                <div class="scenario"><b>PATH</b><span>Hold and draw down then right, or left then up. Sharp turns produce bare path events and consume conflicting swipes.</span></div>
+                <div class="scenario"><b>MOD</b><span>Hold one pointer, tap or drag another. Shift+drag tests the keyboard modifier path.</span></div>
+                <div class="scenario"><b>VIEW</b><span>Pinch, twist, wheel, and inspect scale, raw rotation, confidence, region, and source fields.</span></div>
+                <div class="scenario"><b>NOISE</b><span>Try near-simultaneous two-finger taps, shaky rolls, slow rolls, and off-axis rolls to inspect rejection boundaries.</span></div>
+                <div class="scenario"><b>AREA</b><span>Start in corners, edges, bottom band, and outside the surface to compare region, edgeRegion, area, and grid data.</span></div>
+                <div class="scenario"><b>PAYLOAD</b><span>Open any event row to inspect ordered fields, gestureSequence, rolling gaps, modifier positions, and keyboard source metadata.</span></div>
+            </div>
+            <div class="tuning" id="tuning">
+                <div class="tune"><label>PAN <b data-tune-value="pan">12</b></label><input data-tune="pan" type="range" min="4" max="42" value="12"></div>
+                <div class="tune"><label>SWIPE <b data-tune-value="swipe">90</b></label><input data-tune="swipe" type="range" min="36" max="180" value="90"></div>
+                <div class="tune"><label>PINCH <b data-tune-value="pinch">18</b></label><input data-tune="pinch" type="range" min="6" max="70" value="18"></div>
+                <div class="tune"><label>ROTATE <b data-tune-value="rotate">18</b></label><input data-tune="rotate" type="range" min="8" max="60" value="18"></div>
+                <div class="tune"><label>CONF <b data-tune-value="confidence">0.85</b></label><input data-tune="confidence" type="range" min="0.4" max="1.6" step="0.05" value="0.85"></div>
+                <div class="tune"><label>TAP <b data-tune-value="tap">18</b></label><input data-tune="tap" type="range" min="6" max="48" value="18"></div>
+                <div class="tune"><label>ROLL MS <b data-tune-value="rollDelay">500</b></label><input data-tune="rollDelay" type="range" min="80" max="650" value="500"></div>
+                <div class="tune"><label>ROLL PX <b data-tune-value="rollSpan">24</b></label><input data-tune="rollSpan" type="range" min="14" max="90" value="24"></div>
+            </div>
+        </div>
+        <div id="events"></div>
+    </aside>
+    <div id="modal">
+        <div class="modal-head">
+            <div id="modal-title">EVENT</div>
+            <button id="close">CLOSE</button>
+        </div>
+        <pre id="modal-body"></pre>
+    </div>
+
+<script type="module">
+    import HandTrick from '../handtrick.mjs';
+
+    const surface = document.getElementById('surface');
+    const target = document.getElementById('target');
+    const targetCore = document.getElementById('target-core');
+    const eventsEl = document.getElementById('events');
+    const eventPicks = document.getElementById('event-picks');
+    const searchInput = document.getElementById('search');
+    const groupButton = document.getElementById('group');
+    const tuneInputs = Array.from(document.querySelectorAll('[data-tune]'));
+    const modal = document.getElementById('modal');
+    const modalTitle = document.getElementById('modal-title');
+    const modalBody = document.getElementById('modal-body');
+    const metrics = {
+        event: document.getElementById('m-event'),
+        fingers: document.getElementById('m-fingers'),
+        direction: document.getElementById('m-direction'),
+        delta: document.getElementById('m-delta'),
+        scale: document.getElementById('m-scale'),
+        rotation: document.getElementById('m-rotation'),
+        source: document.getElementById('m-source'),
+        region: document.getElementById('m-region'),
+        state: document.getElementById('s-state'),
+        count: document.getElementById('s-count'),
+        claim: document.getElementById('s-claim')
+    };
+    const mobileQuery = window.matchMedia ? window.matchMedia('(max-width: 900px)') : { matches: false };
+    const state = {
+        x: 0,
+        y: 0,
+        startX: 0,
+        startY: 0,
+        grabOffsetX: 0,
+        grabOffsetY: 0,
+        scale: 1,
+        startScale: 1,
+        rotation: 0,
+        startRotation: 0
+    };
+    const eventStore = [];
+    const lifecycleEvents = new Set(HandTrick.groups.lifecycle);
+    const baseEvents = new Set(['tap', 'press', 'pan', 'swipe', 'pinch', 'rotate', 'path', 'rollingtap', 'modifiertap', 'modifierpan', 'wheelzoom'].filter(type => HandTrick.events.includes(type)));
+    const detailEvents = new Set(HandTrick.events.filter(type => !lifecycleEvents.has(type) && !baseEvents.has(type)));
+    const eventChoices = Array.from(baseEvents).concat('2fingertap', '3fingertap', '2fingerrollingtap', '3fingerrollingtap', 'tap>swipe', 'tap>tap>swipe', 'doubletap>swipe', 'tripletap>swipe', 'tap>tap>tap>swipe', '2fingertap>swipe', 'down>right', 'left>up');
+    const exactEvents = eventChoices.filter(type => type.indexOf('>') >= 0);
+    const registeredEvents = new Set(eventChoices.filter(type => type !== 'doubletap>swipe' && type !== 'tripletap>swipe'));
+    const stream = {
+        filter: 'intent',
+        search: '',
+        group: true
+    };
+    const rollingTuneRatio = {
+        hold: 1.55,
+        step: 0.42
+    };
+    let nextId = 1;
+    let flashTimer = 0;
+    let modalOpen = false;
+    let renderPending = false;
+
+    function apply() {
+        target.style.left = (surface.clientWidth / 2 + state.x) + 'px';
+        target.style.top = (surface.clientHeight / 2 + state.y) + 'px';
+        target.style.transform = 'translate(-50%, -50%)';
+        targetCore.style.transform = 'rotate(' + state.rotation + 'deg) scale(' + state.scale + ')';
+    }
+
+    function surfacePoint(point) {
+        const rect = surface.getBoundingClientRect();
+        return {
+            x: (point.clientX !== undefined ? point.clientX : point.x) - rect.left - rect.width / 2,
+            y: (point.clientY !== undefined ? point.clientY : point.y) - rect.top - rect.height / 2
+        };
+    }
+
+    function startDrag(point) {
+        const current = surfacePoint(point);
+        state.startX = state.x;
+        state.startY = state.y;
+        state.grabOffsetX = state.x - current.x;
+        state.grabOffsetY = state.y - current.y;
+    }
+
+    function moveDrag(point) {
+        const current = surfacePoint(point);
+        state.x = current.x + state.grabOffsetX;
+        state.y = current.y + state.grabOffsetY;
+        apply();
+    }
+
+    function round(value, digits) {
+        const factor = Math.pow(10, digits || 0);
+        return Math.round((Number(value) || 0) * factor) / factor;
+    }
+
+    function flash() {
+        clearTimeout(flashTimer);
+        target.classList.add('flash');
+        flashTimer = setTimeout(() => target.classList.remove('flash'), 140);
+    }
+
+    function eventGroup(type) {
+        if (type.indexOf('>') >= 0) return type;
+        if (baseEvents.has(type)) return type;
+        if (type.indexOf('tap') >= 0) return 'tap';
+        if (type.indexOf('swipe') === 0 || type === 'flick') return 'swipe';
+        if (type.indexOf('pinch') === 0) return 'pinch';
+        if (type.indexOf('rotate') === 0) return 'rotate';
+        if (type.indexOf('press') === 0) return 'press';
+        if (type.indexOf('modifier') === 0) return type.indexOf('pan') >= 0 ? 'modifierpan' : 'modifiertap';
+        if (type.indexOf('rollingtap') === 0 || type.indexOf('rolling') >= 0) return 'rollingtap';
+        if (type === 'wheel' || type === 'wheelzoom') return 'wheelzoom';
+        return type;
+    }
+
+    function isRegistered(event) {
+        const group = eventGroup(event.type);
+        if (registeredEvents.has(event.type) || registeredEvents.has(group)) return true;
+        return event.type === 'gesturecommit' && event.gesture && registeredEvents.has(event.gesture);
+    }
+
+    function isIntentEvent(event) {
+        return isRegistered(event) && !lifecycleEvents.has(event.type);
+    }
+
+    function eventClass(type) {
+        if (baseEvents.has(type) || type.indexOf('>') >= 0) return 'base';
+        if (detailEvents.has(type)) return 'detail';
+        if (lifecycleEvents.has(type)) return 'lifecycle';
+        return 'detail';
+    }
+
+    function updateMetrics(event) {
+        if (!event) return;
+        metrics.event.textContent = event.type.toUpperCase();
+        metrics.fingers.textContent = String(event.fingers || 0);
+        metrics.direction.textContent = event.direction || 'none';
+        metrics.delta.textContent = round(event.deltaX) + ',' + round(event.deltaY);
+        metrics.scale.textContent = round(event.scale || 1, 2).toFixed(2);
+        metrics.rotation.textContent = round(event.rotation || 0, 1).toFixed(1);
+        metrics.source.textContent = event.fingerSource || event.pointerType || 'pointer';
+        metrics.region.textContent = event.region || 'none';
+        metrics.claim.textContent = event.claimed ? 'yes' : 'no';
+    }
+
+    function flags(event) {
+        const values = [];
+        values.push((event.fingers || 0) + 'F');
+        if (event.actualFingers !== undefined && event.actualFingers !== event.fingers) values.push('actual ' + event.actualFingers + 'F');
+        if (event.syntheticFingers) values.push('kbd ' + event.syntheticFingers + 'F');
+        if (event.direction && event.direction !== 'none') values.push(event.direction);
+        if (event.axis && event.axis !== 'none') values.push('axis ' + event.axis);
+        if (event.tapCount) values.push(event.tapCount + 'x');
+        if (event.rolling) values.push('rolling ' + event.rolling.count + 'F');
+        if (event.rolling && event.rolling.overlapCount) values.push('overlap ' + event.rolling.overlapCount);
+        if (event.tapHold) values.push('tap-hold');
+        if (event.modifier) values.push('modifier');
+        if (event.keyboardSubstitute) values.push(event.keyboardSubstitute.role);
+        if (event.keyCombo) values.push(event.keyCombo);
+        if (event.phase) values.push(event.phase);
+        if (event.center && event.center.region) values.push(event.center.region);
+        if (event.intent && event.intent.gesture && event.intent.gesture !== 'possible') values.push('intent ' + event.intent.gesture);
+        if (event.confidence) values.push('c ' + round(event.confidence, 2));
+        return values;
+    }
+
+    function clean(value, seen) {
+        if (!seen) seen = new WeakSet();
+        if (value === null || value === undefined) return value;
+        if (typeof value === 'number') return Number.isFinite(value) ? round(value, 4) : String(value);
+        if (typeof value === 'string' || typeof value === 'boolean') return value;
+        if (typeof value === 'function') return '[function]';
+        if (value instanceof Event) {
+            return {
+                type: value.type,
+                cancelable: value.cancelable,
+                defaultPrevented: value.defaultPrevented,
+                pointerType: value.pointerType || undefined,
+                button: value.button,
+                buttons: value.buttons,
+                deltaX: value.deltaX,
+                deltaY: value.deltaY
+            };
+        }
+        if (value instanceof Element) {
+            return '<' + value.tagName.toLowerCase() + (value.id ? '#' + value.id : '') + '>';
+        }
+        if (Array.isArray(value)) return value.map(item => clean(item, seen));
+        if (typeof value === 'object') {
+            if (seen.has(value)) return '[circular]';
+            seen.add(value);
+            const out = {};
+            Object.keys(value).sort().forEach(key => {
+                if (key === 'instance') return;
+                out[key] = clean(value[key], seen);
+            });
+            seen.delete(value);
+            return out;
+        }
+        return String(value);
+    }
+
+    function store(event) {
+        const intent = isIntentEvent(event);
+        const entry = {
+            id: nextId++,
+            type: event.type,
+            time: new Date().toLocaleTimeString(),
+            flags: flags(event),
+            data: clean(event),
+            group: eventGroup(event.type),
+            className: eventClass(event.type),
+            intent,
+            count: 1
+        };
+
+        if (stream.group && eventStore[0] && eventStore[0].type === entry.type && eventStore[0].group === entry.group) {
+            eventStore[0].count++;
+            eventStore[0].time = entry.time;
+            eventStore[0].flags = entry.flags;
+            eventStore[0].data = entry.data;
+            scheduleRender();
+            return;
+        }
+
+        eventStore.unshift(entry);
+        if (eventStore.length > 80) eventStore.length = 80;
+        scheduleRender();
+    }
+
+    function scheduleRender() {
+        if (renderPending) return;
+        renderPending = true;
+        requestAnimationFrame(() => {
+            renderPending = false;
+            renderEvents();
+        });
+    }
+
+    function visibleEntries() {
+        const search = stream.search.trim().toLowerCase();
+        const limit = mobileQuery.matches && !document.body.classList.contains('tools-open') ? 12 : 80;
+        return eventStore.filter(entry => {
+            if (stream.filter === 'intent' && !entry.intent) return false;
+            if (stream.filter === 'base' && entry.className !== 'base') return false;
+            if (stream.filter === 'detail' && entry.className !== 'detail') return false;
+            if (search && (entry.type + ' ' + entry.flags.join(' ')).toLowerCase().indexOf(search) < 0) return false;
+            return true;
+        }).slice(0, limit);
+    }
+
+    function renderEvents() {
+        const entries = visibleEntries();
+        metrics.count.textContent = String(entries.length);
+        if (!entries.length) {
+            eventsEl.innerHTML = '<div class="event-row"><div><div class="event-name">NONE</div><div class="event-time">waiting</div></div><div class="chips"><span class="chip">ready</span></div></div>';
+            return;
+        }
+        eventsEl.innerHTML = entries.map(entry => {
+            const chips = entry.flags.map(flag => {
+                const cls = flag.indexOf('modifier') >= 0 || flag.indexOf('intent') >= 0 ? ' hot' : flag.indexOf('cancel') >= 0 ? ' warn' : '';
+                return '<span class="chip' + cls + '">' + escapeHtml(flag) + '</span>';
+            }).join('');
+            const count = entry.count > 1 ? ' <span class="event-count">x' + entry.count + '</span>' : '';
+            return '<button class="event-row" data-id="' + entry.id + '"><div><div class="event-name">' + escapeHtml(entry.type) + count + '</div><div class="event-time">' + escapeHtml(entry.time) + '</div></div><div class="chips">' + chips + '</div></button>';
+        }).join('');
+    }
+
+    function renderEventPicks() {
+        eventPicks.innerHTML = eventChoices.map(type => {
+            const cls = registeredEvents.has(type) ? ' class="active"' : '';
+            return '<button data-event="' + escapeHtml(type) + '"' + cls + '>' + escapeHtml(type) + '</button>';
+        }).join('');
+    }
+
+    function applyIntentEvents() {
+        hand.setOptions({
+            intent: {
+                events: Array.from(registeredEvents)
+            }
+        });
+        exactEvents.forEach(type => {
+            hand.off(type, flash);
+            if (registeredEvents.has(type)) hand.on(type, flash);
+        });
+        renderEventPicks();
+        renderEvents();
+    }
+
+    function numberTune(name) {
+        const input = tuneInputs.find(item => item.dataset.tune === name);
+        return input ? Number(input.value) : 0;
+    }
+
+    function applyTuning() {
+        tuneInputs.forEach(input => {
+            const value = document.querySelector('[data-tune-value="' + input.dataset.tune + '"]');
+            if (value) value.textContent = input.value;
+        });
+
+        const swipe = numberTune('swipe');
+        const pinch = numberTune('pinch');
+        const rollDelay = numberTune('rollDelay');
+        const rollSpan = numberTune('rollSpan');
+
+        hand.setOptions({
+            tap: { maxMove: numberTune('tap') },
+            pan: { threshold: numberTune('pan') },
+            swipe: {
+                distance: swipe,
+                distanceByFingers: { 1: swipe, 2: Math.max(36, Math.round(swipe * 0.68)), 3: Math.max(36, Math.round(swipe * 0.68)), 4: Math.max(36, Math.round(swipe * 0.68)) }
+            },
+            pinch: {
+                distance: pinch,
+                scale: Math.max(0.02, pinch / 600)
+            },
+            rotate: {
+                angle: numberTune('rotate'),
+                confidence: numberTune('confidence')
+            },
+            rolling: {
+                maxDelay: rollDelay,
+                maxHold: Math.max(780, Math.round(rollDelay * rollingTuneRatio.hold)),
+                maxMove: Math.max(14, Math.round(numberTune('tap') * 0.9)),
+                minSpan: rollSpan,
+                minStep: Math.max(8, Math.round(rollSpan * rollingTuneRatio.step))
+            }
+        });
+    }
+
+    function escapeHtml(value) {
+        return String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
+    }
+
+    function openEvent(id) {
+        const entry = eventStore.find(item => item.id === id);
+        if (!entry) return;
+        modalOpen = true;
+        hand.disable();
+        metrics.state.textContent = 'paused';
+        modalTitle.textContent = entry.type.toUpperCase() + ' ' + entry.time;
+        modalBody.textContent = JSON.stringify(entry.data, null, 2);
+        modal.classList.add('open');
+    }
+
+    function closeModal() {
+        modal.classList.remove('open');
+        modalOpen = false;
+        hand.enable();
+        metrics.state.textContent = 'enabled';
+    }
+
+    const hand = new HandTrick(surface, {
+        input: 'auto',
+        preventDefault: false,
+        ignore: targetNode => targetNode.closest('button, #modal'),
+        intent: {
+            events: Array.from(registeredEvents),
+            fastPathTime: 0.62,
+            releaseGuard: 180,
+            releaseDistance: 34
+        },
+        claim: {
+            enabled: true,
+            threshold: 0.55,
+            preventDefault: true
+        },
+        pan: {
+            threshold: 12,
+            fingers: [1],
+            canStart: event => event.tapHold || !event.modifier
+        },
+        press: {
+            delay: 520,
+            repeat: 900
+        },
+        rolling: {
+            minDelay: 10,
+            maxDelay: 500,
+            maxHold: 780,
+            maxMove: 18,
+            minSpan: 24,
+            minStep: 10
+        },
+        wheel: {
+            preventDefault: true
+        }
+    });
+
+    hand.on('*', event => {
+        if (modalOpen) return;
+        if (isIntentEvent(event)) updateMetrics(event);
+        store(event);
+    });
+
+    hand.on('panstart', event => {
+        startDrag(event.center);
+    });
+
+    hand.on('pan', event => {
+        moveDrag(event.center);
+    });
+
+    hand.on('modifierpanstart', event => {
+        startDrag(event.actionPointer || event.center);
+    });
+
+    hand.on('modifierpan', event => {
+        moveDrag(event.actionPointer || event.center);
+    });
+
+    hand.on('pinchstart', () => {
+        state.startScale = state.scale;
+    });
+
+    hand.on('pinch', event => {
+        state.scale = Math.max(0.25, Math.min(4, state.startScale * event.scale));
+        apply();
+    });
+
+    hand.on('rotatestart', () => {
+        state.startRotation = state.rotation;
+    });
+
+    hand.on('rotate', event => {
+        state.rotation = state.startRotation + event.rotation;
+        apply();
+    });
+
+    hand.on('wheelzoom', event => {
+        state.scale = Math.max(0.25, Math.min(4, state.scale * event.scale));
+        apply();
+    });
+
+    ['tap', 'tapsequence', 'multitap', 'press', 'swipe', 'flick', 'rollingtap', 'modifiertap', 'pressurechange'].forEach(type => {
+        hand.on(type, flash);
+    });
+    exactEvents.forEach(type => {
+        if (registeredEvents.has(type)) hand.on(type, flash);
+    });
+
+    eventsEl.addEventListener('click', event => {
+        const row = event.target.closest('.event-row');
+        if (!row || !row.dataset.id) return;
+        openEvent(Number(row.dataset.id));
+    });
+
+    document.querySelectorAll('[data-filter]').forEach(button => {
+        button.addEventListener('click', () => {
+            stream.filter = button.dataset.filter;
+            document.querySelectorAll('[data-filter]').forEach(item => item.classList.toggle('active', item === button));
+            renderEvents();
+        });
+    });
+
+    searchInput.addEventListener('input', () => {
+        stream.search = searchInput.value;
+        renderEvents();
+    });
+
+    groupButton.addEventListener('click', () => {
+        stream.group = !stream.group;
+        groupButton.classList.toggle('active', stream.group);
+    });
+
+    eventPicks.addEventListener('click', event => {
+        const button = event.target.closest('[data-event]');
+        if (!button) return;
+        const type = button.dataset.event;
+        if (registeredEvents.has(type)) registeredEvents.delete(type);
+        else registeredEvents.add(type);
+        applyIntentEvents();
+        metrics.event.textContent = 'READY';
+    });
+
+    tuneInputs.forEach(input => {
+        input.addEventListener('input', applyTuning);
+    });
+
+    document.getElementById('close').addEventListener('click', closeModal);
+
+    document.getElementById('tools').addEventListener('click', () => {
+        document.body.classList.toggle('tools-open');
+        renderEvents();
+    });
+
+    modal.addEventListener('click', event => {
+        if (event.target === modal) closeModal();
+    });
+
+    document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && modal.classList.contains('open')) closeModal();
+    });
+
+    document.getElementById('reset').addEventListener('click', () => {
+        state.x = 0;
+        state.y = 0;
+        state.scale = 1;
+        state.rotation = 0;
+        state.startX = 0;
+        state.startY = 0;
+        state.grabOffsetX = 0;
+        state.grabOffsetY = 0;
+        state.startScale = 1;
+        state.startRotation = 0;
+        metrics.event.textContent = 'READY';
+        metrics.fingers.textContent = '0';
+        metrics.direction.textContent = 'none';
+        metrics.delta.textContent = '0,0';
+        metrics.scale.textContent = '1.00';
+        metrics.rotation.textContent = '0.0';
+        metrics.source.textContent = 'pointer';
+        metrics.region.textContent = 'center';
+        metrics.claim.textContent = 'no';
+        hand.resetTaps();
+        apply();
+    });
+
+    document.getElementById('clear').addEventListener('click', () => {
+        eventStore.length = 0;
+        renderEvents();
+        hand.resetTaps();
+    });
+
+    apply();
+    applyTuning();
+    renderEventPicks();
+    renderEvents();
+</script>
+</body>
+</html>

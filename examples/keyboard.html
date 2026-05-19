@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>HandTrick Keyboard Roles</title>
+<style>
+    * { box-sizing: border-box; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #050505; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { display: grid; grid-template-rows: minmax(0, 1fr) 132px; }
+    #surface { display: grid; place-items: center; touch-action: none; background: #080808; }
+    #panel { width: min(86vw, 620px); border: 1px solid rgba(255,255,255,0.18); padding: 20px; background: rgba(255,255,255,0.03); }
+    h1 { margin: 0 0 12px; font-size: 13px; letter-spacing: 0.16em; }
+    p { margin: 0; color: rgba(255,255,255,0.64); font-size: 13px; line-height: 1.6; }
+    #log { margin: 0; padding: 14px; overflow: auto; border-top: 1px solid rgba(255,255,255,0.12); font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: rgba(255,255,255,0.76); }
+</style>
+</head>
+<body>
+<main id="surface">
+    <section id="panel">
+        <h1>KEYBOARD ROLES</h1>
+        <p>Hold Alt for two-finger events. Hold Ctrl for three-finger events. Hold Meta and click in a short line for rolling tap. Hold Shift and drag for modifier pan.</p>
+    </section>
+</main>
+<pre id="log"></pre>
+<script src="../handtrick.js"></script>
+<script>
+const surface = document.getElementById('surface');
+const log = document.getElementById('log');
+const hand = new HandTrick(surface, {
+    intent: { events: ['tap', 'swipe', '2fingertap', '3fingertap', 'rollingtap', 'modifierpan'] },
+    pan: { enabled: false }
+});
+
+function write(event) {
+    const parts = [
+        event.type,
+        'fingers=' + event.fingers,
+        'actual=' + event.actualFingers,
+        'source=' + event.fingerSource,
+        event.keyboardSubstitute ? 'role=' + event.keyboardSubstitute.role : '',
+        event.direction && event.direction !== 'none' ? 'dir=' + event.direction : ''
+    ].filter(Boolean);
+    log.textContent = parts.join('  ') + '\n' + log.textContent;
+}
+
+['tap', '2fingertap', '3fingertap', 'rollingtap', 'swipe', 'modifierpan'].forEach(type => hand.on(type, write));
+</script>
+</body>
+</html>
