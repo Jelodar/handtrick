@@ -15,14 +15,14 @@
 </head>
 <body>
 <main id="surface">
-    <div id="readout">Tap two to four fingers in a quick overlapping wave. Simultaneous contacts and short same-place double taps stay taps.<b>waiting</b><code>try left-to-right, right-to-left, Meta-click line, or Alt+tap for normal two-finger tap</code></div>
+    <div id="readout">Tap two to four fingers in a quick overlapping wave. Stagger plus overlap becomes rolling; simultaneous contacts and same-place repeats stay taps.<b>waiting</b><code>try left-to-right, right-to-left, Meta-click line, Alt+tap for 2F, Shift+Meta for 4F</code></div>
 </main>
 <script src="../handtrick.js"></script>
 <script>
 const surface = document.getElementById('surface');
 const value = document.querySelector('b');
 const hand = new HandTrick(surface, {
-    intent: { events: ['rollingtap', '2fingertap', '3fingertap', '4fingertap'] },
+    intent: { events: ['rolling', 'tap'] },
     pan: { enabled: false },
     swipe: { enabled: false },
     pinch: { enabled: false },
@@ -30,19 +30,19 @@ const hand = new HandTrick(surface, {
     press: { enabled: false }
 });
 
-hand.on('rollingtap', event => {
+hand.on('rolling', event => {
     value.textContent = event.rolling.count + 'f rolling ' + event.direction + '  source=' + event.rolling.source + '  overlap=' + event.rolling.overlapCount + '  delays=' + event.rolling.delays.join('/');
 });
 
-hand.on('2fingertap', event => {
+hand.on('tap', { fingers: 2 }, event => {
     value.textContent = '2f tap source=' + event.fingerSource;
 });
 
-hand.on('3fingertap', () => {
+hand.on('tap', { fingers: 3 }, () => {
     value.textContent = '3f tap';
 });
 
-hand.on('4fingertap', () => {
+hand.on('tap', { fingers: 4 }, () => {
     value.textContent = '4f tap';
 });
 </script>

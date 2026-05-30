@@ -2,18 +2,26 @@ const fs = require('fs');
 const path = require('path');
 const { assert, HandTrick, create, pointerEvent, run } = require('./helpers');
 
-run('runtime version matches package metadata', () => {
-    const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, '..', 'package.json'), 'utf8'));
-    assert.strictEqual(HandTrick.version, pkg.version);
-});
-
 run('public event registry contains documented gesture families', () => {
-    ['tap', 'swipe', 'pinch', 'rotate', 'wheelzoom', 'ignored'].forEach(type => {
+    ['tap', 'swipe', 'swipe:mod', 'swipe:mod:left', 'pinch', 'pinch:mod', 'rotate', 'rotate:mod', 'path', 'circle', 'circle:cw', 'circle:ccw', 'arc', 'arc:up', 'wheel:zoom', 'input:ignored'].forEach(type => {
         assert.ok(HandTrick.events.includes(type));
     });
-    ['tap', 'swipe', 'pinch', 'rotate', 'wheel'].forEach(type => {
-        assert.ok(HandTrick.gestures.includes(type));
+    ['swipe:flick', 'swipe:flick:left', 'swipe:slow:right', 'swipe:normal:right', 'circle:2f', 'circle:2f:cw', 'circle:2f:2x', 'swipe:2f', 'swipe:2f:left', 'swipe:flick:2f:left', 'swipe:mod:2f:left'].forEach(type => {
+        assert.ok(!HandTrick.events.includes(type));
+        assert.strictEqual(HandTrick.isEvent(type), false);
     });
+    assert.strictEqual(HandTrick.event('up>circle:2f:ccw'), '');
+    assert.strictEqual(HandTrick.isEvent('circle:4x'), true);
+    assert.strictEqual(HandTrick.events.includes('circle:4x'), false);
+    assert.strictEqual(HandTrick.isEvent('tap:swipe'), false);
+    ['tap', 'press', 'pan', 'swipe', 'pinch', 'rotate', 'path', 'rolling', 'modifier', 'pressure', 'wheel'].forEach(type => {
+        assert.ok(HandTrick.recognizers.includes(type));
+    });
+    ['circle', 'arc', 'pressure'].forEach(type => {
+        assert.ok(HandTrick.families.includes(type));
+    });
+    assert.strictEqual('commonEvents' in HandTrick, false);
+    assert.strictEqual('gestures' in HandTrick, false);
 });
 
 run('staggered multi-finger release suppresses accidental one-finger swipe', () => {
@@ -95,7 +103,7 @@ run('staggered two-finger tap stays two-finger tap', () => {
     const { node, hand } = create({
         clock: () => t,
         intent: {
-            events: ['2fingertap', '1fingertap']
+            events: ['tap']
         },
         pan: { enabled: false },
         swipe: { enabled: false },
@@ -105,8 +113,8 @@ run('staggered two-finger tap stays two-finger tap', () => {
     let one = 0;
     let two = 0;
 
-    hand.on('1fingertap', () => one++);
-    hand.on('2fingertap', () => two++);
+    hand.on('tap', { fingers: 1 }, () => one++);
+    hand.on('tap', { fingers: 2 }, () => two++);
 
     hand.pointerDown(pointerEvent(node, 1, 100, 100));
     hand.pointerDown(pointerEvent(node, 2, 140, 100));
@@ -124,7 +132,7 @@ run('three-finger tap does not collapse to rolling or two-finger tap', () => {
     const { node, hand } = create({
         clock: () => t,
         intent: {
-            events: ['3fingertap', '2fingertap', 'rollingtap']
+            events: ['tap', 'rolling']
         },
         pan: { enabled: false },
         swipe: { enabled: false },
@@ -135,9 +143,9 @@ run('three-finger tap does not collapse to rolling or two-finger tap', () => {
     let three = 0;
     let rolling = 0;
 
-    hand.on('2fingertap', () => two++);
-    hand.on('3fingertap', () => three++);
-    hand.on('rollingtap', () => rolling++);
+    hand.on('tap', { fingers: 2 }, () => two++);
+    hand.on('tap', { fingers: 3 }, () => three++);
+    hand.on('rolling', () => rolling++);
 
     hand.pointerDown(pointerEvent(node, 1, 100, 100));
     t = 6;

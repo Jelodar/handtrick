@@ -61,7 +61,7 @@
 </head>
 <body>
 <main id="surface">
-    <div id="status">Tap or swipe the surface.</div>
+    <div id="status">Tap, swipe, pinch, or rotate. Command handlers pick one winner; region and source appear below.</div>
 </main>
 <pre id="log"></pre>
 <script src="../handtrick.js"></script>
@@ -76,19 +76,20 @@ function write(event) {
         event.type,
         'dir=' + event.direction,
         'region=' + event.region,
-        'fingers=' + event.fingers
+        'fingers=' + event.fingers,
+        'source=' + event.fingerSource
     ].join('  ');
     log.textContent = line + '\n' + log.textContent;
     status.textContent = line;
 }
 
-hand.on('tap', write);
-hand.on('swipe', write);
-hand.on('pinch', event => {
+hand.command('tap', { fingerSource: 'auto' }, write);
+hand.command('swipe', { fingerSource: 'auto' }, write);
+hand.command('pinch', event => {
     status.textContent = 'pinch scale=' + event.scale.toFixed(2);
 });
 
-hand.on('rotate', event => {
+hand.command('rotate', event => {
     status.textContent = 'rotate=' + event.rotation.toFixed(1);
 });
 </script>

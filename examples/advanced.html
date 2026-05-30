@@ -37,15 +37,15 @@
 <aside>
     <header>
         <h1>ADVANCED</h1>
-        <p>Combined routing for regions, exclusive sequences, bare paths, wheel, keyboard roles, rolling tap, modifier pan, pinch, and guarded rotate.</p>
+        <p>Combined routing for regions, exclusive sequences, bare paths, wheel, keyboard roles, rolling tap, modifier pan, pinch, and guarded rotate. The intent list is explicit here because this page is a mixed demo.</p>
     </header>
     <div class="hints">
         <div class="hint"><b>TAP</b><span>Tap center, edges, and corners. Double-tap style chains stay deterministic when a longer sequence is armed.</span></div>
-        <div class="hint"><b>SEQ</b><span>Tap, tap, then swipe right. The sequence wins; direct tap and doubletap do not also fire.</span></div>
-        <div class="hint"><b>KEYS</b><span>Alt+tap/swipe acts as two fingers. Ctrl+tap acts as three. Meta-click a short line for keyboard roll.</span></div>
+        <div class="hint"><b>SEQ</b><span>Tap, tap, then swipe right. The sequence wins; direct tap and tap:2x do not also fire.</span></div>
+        <div class="hint"><b>KEYS</b><span>Alt+tap/swipe acts as 2F. Ctrl+tap acts as 3F. Shift+Meta acts as 4F. Meta-click a short line for keyboard roll.</span></div>
         <div class="hint"><b>ROLL</b><span>Roll two or three fingers left/right with staggered downs. Wider spacing and delayed waves are accepted.</span></div>
-        <div class="hint"><b>MOD</b><span>Hold one pointer, tap or drag another. Shift+drag mirrors modifier pan on desktop.</span></div>
-        <div class="hint"><b>PATH</b><span>Draw left then down while held. Draw down then right for the second command.</span></div>
+        <div class="hint"><b>MOD</b><span>Hold one pointer, tap or drag another. Shift also modifies swipe, pinch, rotate, and desktop pan.</span></div>
+        <div class="hint"><b>PATH</b><span>Draw left-down, down-right, or a clockwise square twice. Longer paths suppress shorter prefixes and criteria.</span></div>
         <div class="hint"><b>VIEW</b><span>Pinch or wheel to scale. Twist deliberately to inspect rebased rotation and raw rotation.</span></div>
     </div>
     <pre id="log">waiting</pre>
@@ -56,17 +56,19 @@ const surface = document.getElementById('surface');
 const marker = document.getElementById('marker');
 const log = document.getElementById('log');
 const state = { x: 0, y: 0, scale: 1, rotation: 0, startX: 0, startY: 0, startScale: 1, startRotation: 0 };
+const squarePath = 'right>down>left>up';
+const doubleSquarePath = squarePath + '>' + squarePath;
 const hand = new HandTrick(surface, ['map', {
     intent: {
-        events: ['tap', 'tap>tap>swiperight', '2fingertap', '3fingertap', 'rollingtap', 'swipe', 'pinch', 'rotate', 'wheelzoom', 'left>down', 'down>right', 'modifiertap', 'modifierpan']
+        events: ['tap', 'tap>tap>swipe:right', 'rolling', 'swipe', 'swipe:mod', 'pinch', 'pinch:mod', 'rotate', 'rotate:mod', 'wheel:zoom', 'left>down', 'down>right', squarePath, doubleSquarePath, 'tap:mod', 'pan:mod']
     },
     pan: { fingers: [1], threshold: 10, minTime: 0, minSamples: 1, canStart: () => true },
-    swipe: { enabled: true, distanceByFingers: { 1: 80, 2: 58, 3: 58 }, minSamples: 1 },
+    swipe: { enabled: true, distanceByFingers: { 1: 80, 2: 58, 3: 58, 4: 58 }, minSamples: 1 },
     rotate: { enabled: true, angle: 8, minTime: 90, minSamples: 2, confidence: 0.7 },
     wheel: { enabled: true, preventDefault: true },
     modifier: {
         keyboard: {
-            roles: { modifier: 'shift', twoFingers: 'alt', threeFingers: 'ctrl' },
+            roles: { modifier: 'shift', twoFingers: 'alt', threeFingers: 'ctrl', fourFingers: 'shift+meta' },
             combos: { plain: 'shift', shiftAlt: 'shift+alt' }
         }
     }
@@ -102,8 +104,8 @@ function write(event, label) {
 }
 
 hand.on('tap', event => write(event));
-hand.on('2fingertap', event => write(event, 'fit'));
-hand.on('3fingertap', event => {
+hand.on('tap', { fingers: 2 }, event => write(event, 'fit'));
+hand.on('tap', { fingers: 3 }, event => {
     state.x = 0;
     state.y = 0;
     state.scale = 1;
@@ -111,15 +113,20 @@ hand.on('3fingertap', event => {
     render();
     write(event, 'reset');
 });
-hand.on('tap>tap>swiperight', event => write(event, 'sequence'));
+hand.on('tap', { fingers: 4 }, event => write(event, '4f'));
+hand.on('tap>tap>swipe:right', event => write(event, 'sequence'));
 hand.on('swipe:up', { startRegion: 'bottom' }, event => write(event, 'bottom-up'));
 hand.on('swipe', { fingers: 2 }, event => write(event, '2f swipe'));
+hand.on('swipe:mod:right', event => write(event, 'mod swipe'));
 hand.on('left>down', event => write(event, 'path L-D'));
 hand.on('down>right', event => write(event, 'path D-R'));
-hand.on('rollingtap', event => write(event, 'rolling'));
-hand.on('rollingtap:right', event => write(event, 'rolling right'));
-hand.on('modifiertap', event => write(event, 'mod tap'));
-hand.on('panstart', () => {
+hand.on(squarePath, event => write(event, 'path square'));
+hand.on(doubleSquarePath, event => write(event, 'path double'));
+hand.on('path', { path: doubleSquarePath }, event => write(event, 'criteria double'), { phase: 'observe' });
+hand.on('rolling', event => write(event, 'rolling'));
+hand.on('rolling:right', event => write(event, 'rolling right'));
+hand.on('tap:mod', event => write(event, 'mod tap'));
+hand.on('pan:start', () => {
     state.startX = state.x;
     state.startY = state.y;
 });
@@ -128,17 +135,20 @@ hand.on('pan', event => {
     state.y = state.startY + event.deltaY;
     render();
 });
-hand.on('modifierpanstart', () => {
+hand.on('pan:mod:start', () => {
     state.startX = state.x;
     state.startY = state.y;
 });
-hand.on('modifierpan', event => {
+hand.on('pan:mod', event => {
     state.x = state.startX + event.actionDeltaX;
     state.y = state.startY + event.actionDeltaY;
     render();
     write(event, 'mod pan');
 });
-hand.on('pinchstart', () => {
+hand.on('pinch:start', () => {
+    state.startScale = state.scale;
+});
+hand.on('pinch:mod:start', () => {
     state.startScale = state.scale;
 });
 hand.on('pinch', event => {
@@ -146,18 +156,31 @@ hand.on('pinch', event => {
     render();
     write(event, 'pinch');
 });
-hand.on('wheelzoom', event => {
+hand.on('pinch:mod:out', event => {
+    state.scale = clamp(state.startScale * event.scale, 0.35, 4);
+    render();
+    write(event, 'mod pinch');
+});
+hand.on('wheel:zoom', event => {
     state.scale = clamp(state.scale * event.scale, 0.35, 4);
     render();
     write(event, 'wheel');
 });
-hand.on('rotatestart', () => {
+hand.on('rotate:start', () => {
+    state.startRotation = state.rotation;
+});
+hand.on('rotate:mod:start', () => {
     state.startRotation = state.rotation;
 });
 hand.on('rotate', event => {
     state.rotation = state.startRotation + event.rotation;
     render();
     write(event, event.rotation > 0 ? 'rotate cw' : 'rotate ccw');
+});
+hand.on('rotate:mod:cw', event => {
+    state.rotation = state.startRotation + event.rotation;
+    render();
+    write(event, 'mod rotate');
 });
 render();
 </script>

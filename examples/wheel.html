@@ -15,7 +15,7 @@
 <body>
 <main id="surface">
     <div id="frame">WHEEL</div>
-    <div id="hud">scale=1.00</div>
+    <div id="hud">scale=1.00; wheel preventDefault is enabled here</div>
 </main>
 <script src="../handtrick.js"></script>
 <script>
@@ -24,11 +24,11 @@ const frame = document.getElementById('frame');
 const hud = document.getElementById('hud');
 let scale = 1;
 const hand = new HandTrick(surface, ['viewer', {
-    intent: { events: ['wheelzoom'] },
+    intent: { events: ['wheel:zoom'] },
     wheel: { preventDefault: true, zoomFactor: 0.0015 }
 }]);
 
-hand.on('wheelzoom', event => {
+hand.on('wheel:zoom', event => {
     scale = Math.max(0.3, Math.min(4, scale * event.scale));
     frame.style.transform = 'scale(' + scale + ')';
     hud.textContent = 'scale=' + scale.toFixed(2) + ' region=' + event.region + ' delta=' + Math.round(event.deltaY);

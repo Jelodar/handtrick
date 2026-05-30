@@ -59,7 +59,7 @@
 </head>
 <body>
 <main id="surface">
-    <div id="frame">MEDIA SURFACE</div>
+    <div id="frame">TAP-HOLD PAN</div>
     <div id="hud">scale=1.00 x=0 y=0</div>
 </main>
 <script src="../handtrick.js"></script>
@@ -70,8 +70,7 @@ const hud = document.getElementById('hud');
 const state = { x: 0, y: 0, scale: 1, rotation: 0, startX: 0, startY: 0, startScale: 1, startRotation: 0 };
 const hand = new HandTrick(surface, ['media', {
     pan: { canStart: event => event.tapHold },
-    rotate: { enabled: true, angle: 10, minTime: 90, minSamples: 2, confidence: 0.7 },
-    intent: { events: ['tap', 'pan', 'swipe', 'pinch', 'rotate', 'path'] }
+    rotate: { enabled: true, angle: 10, minTime: 90, minSamples: 2, confidence: 0.7 }
 }]);
 
 function render() {
@@ -79,7 +78,7 @@ function render() {
     hud.textContent = 'scale=' + state.scale.toFixed(2) + ' rot=' + Math.round(state.rotation) + ' x=' + Math.round(state.x) + ' y=' + Math.round(state.y);
 }
 
-hand.on('panstart', () => {
+hand.on('pan:start', () => {
     state.startX = state.x;
     state.startY = state.y;
 });
@@ -90,7 +89,7 @@ hand.on('pan', event => {
     render();
 });
 
-hand.on('pinchstart', () => {
+hand.on('pinch:start', () => {
     state.startScale = state.scale;
 });
 
@@ -99,7 +98,7 @@ hand.on('pinch', event => {
     render();
 });
 
-hand.on('rotatestart', () => {
+hand.on('rotate:start', () => {
     state.startRotation = state.rotation;
 });
 

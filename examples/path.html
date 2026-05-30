@@ -52,30 +52,82 @@
         font: 22px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         color: #0a84ff;
     }
+
+    .grid {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 6px 16px;
+        margin-top: 14px;
+        color: rgba(255,255,255,0.72);
+        font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .grid span:nth-child(even) {
+        color: #30d158;
+        text-align: right;
+    }
 </style>
 </head>
 <body>
 <main id="surface">
-    <div id="readout">Draw down then right without lifting.<b>none</b></div>
+    <div id="readout">
+        Draw down then right, a two-finger right-up, up then square, a clockwise square, or a square twice. Swipe is disabled here so path precedence is isolated.
+        <b>none</b>
+        <div class="grid" id="counts"></div>
+    </div>
 </main>
 <script src="../handtrick.js"></script>
 <script>
 const surface = document.getElementById('surface');
 const readout = document.getElementById('readout');
 const value = readout.querySelector('b');
+const counts = document.getElementById('counts');
+const shortPath = 'right>down>left>up';
+const longPath = shortPath + '>' + shortPath;
+const state = {
+    namedShort: 0,
+    namedLong: 0,
+    twoFinger: 0,
+    circleCw: 0,
+    circleCcw: 0,
+    arcUp: 0,
+    upCircle: 0,
+    doubleCircle: 0,
+    criteriaShort: 0,
+    criteriaLong: 0,
+    criteriaTwoFinger: 0
+};
 const hand = new HandTrick(surface, {
-    intent: { events: ['down>right', 'left>up'] },
+    intent: { events: ['down>right', 'left>up', 'right>up', 'circle', 'arc:up', 'up>circle', 'circle:2x', shortPath, longPath] },
     pan: { enabled: false },
     swipe: { enabled: false },
     path: {
+        fingers: [1, 2],
         minDistance: 42,
         segmentDistance: 42,
         axisRatio: 1.35,
-        turnAngle: 55
+        turnAngle: 55,
+        maxSegments: 4
     }
 });
 
-hand.on('path', event => {
+function render() {
+    counts.innerHTML = [
+        ['named short', state.namedShort],
+        ['named long', state.namedLong],
+        ['2f right up', state.twoFinger],
+        ['circle cw', state.circleCw],
+        ['circle ccw', state.circleCcw],
+        ['arc up', state.arcUp],
+        ['up circle', state.upCircle],
+        ['circle 2x', state.doubleCircle],
+        ['criteria short', state.criteriaShort],
+        ['criteria long', state.criteriaLong],
+        ['criteria 2f', state.criteriaTwoFinger]
+    ].map(row => '<span>' + row[0] + '</span><span>' + row[1] + '</span>').join('');
+}
+
+hand.observe('path', event => {
     value.textContent = event.pathText || 'none';
 });
 
@@ -87,9 +139,74 @@ hand.on('left>up', () => {
     value.textContent = 'matched left>up';
 });
 
-hand.on('pathend', event => {
+hand.on('right>up', { fingers: 2 }, () => {
+    state.twoFinger++;
+    value.textContent = 'matched 2f right>up';
+    render();
+});
+
+hand.on('circle:cw', event => {
+    state.circleCw++;
+    value.textContent = 'circle ' + event.direction;
+    render();
+});
+
+hand.on('circle:ccw', event => {
+    state.circleCcw++;
+    value.textContent = 'circle ' + event.direction;
+    render();
+});
+
+hand.on('arc:up', event => {
+    state.arcUp++;
+    value.textContent = 'arc ' + event.direction;
+    render();
+});
+
+hand.on('up>circle', () => {
+    state.upCircle++;
+    value.textContent = 'matched up>circle';
+    render();
+});
+
+hand.on('circle:2x:cw', event => {
+    state.doubleCircle++;
+    value.textContent = 'circle ' + event.circle.count + 'x ' + event.direction;
+    render();
+});
+
+hand.on(shortPath, () => {
+    state.namedShort++;
+    value.textContent = 'named short';
+    render();
+});
+
+hand.on(longPath, () => {
+    state.namedLong++;
+    value.textContent = 'named long';
+    render();
+});
+
+hand.on('path', { path: shortPath }, () => {
+    state.criteriaShort++;
+    render();
+}, { phase: 'observe' });
+
+hand.on('path', { path: longPath }, () => {
+    state.criteriaLong++;
+    render();
+}, { phase: 'observe' });
+
+hand.on('path', { path: 'right>up', fingers: 2 }, () => {
+    state.criteriaTwoFinger++;
+    render();
+}, { phase: 'observe' });
+
+hand.on('path:end', event => {
     if (!event.pathText) value.textContent = 'none';
 });
+
+render();
 </script>
 </body>
 </html>

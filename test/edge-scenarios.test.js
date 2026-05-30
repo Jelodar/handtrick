@@ -33,6 +33,7 @@ run('static helpers normalize common user input', () => {
 
     assert.strictEqual(HandTrick.keyCombo('command+option+shift'), 'shift+alt+meta');
     assert.strictEqual(HandTrick.path('Left>DOWN'), 'left>down');
+    assert.strictEqual(HandTrick.path('up>circle:ccw:2x'), 'up>circle:2x:ccw');
     assert.strictEqual(HandTrick.path('path:Left>DOWN'), '');
     assert.strictEqual(HandTrick.path('path>left:up'), '');
     assert.strictEqual(HandTrick.region(point, ['right', 'left']), true);
@@ -43,7 +44,7 @@ run('criteria arrays route multiple regions and finger counts', () => {
     const { node, hand } = createMouse();
     const seen = [];
 
-    hand.when('tap', { region: ['left', 'right'], fingers: [1, 2] }, event => {
+    hand.on('tap', { region: ['left', 'right'], fingers: [1, 2] }, event => {
         seen.push(event.region);
     });
 
@@ -58,7 +59,7 @@ run('tap chain distance and interval prevent false double tap', () => {
     const { node, hand } = createMouse({ clock: () => t });
     let doubles = 0;
 
-    hand.on('doubletap', () => doubles++);
+    hand.on('tap:2x', () => doubles++);
 
     tap(hand, node, 20, 20);
     t = 100;
@@ -77,7 +78,7 @@ run('open-ended tap aliases emit fourth tap without extra configuration', () => 
     let four = 0;
     const counts = [];
 
-    hand.on('1finger4tap', detail => {
+    hand.on('tap:4x', { fingers: 1 }, detail => {
         four++;
         counts.push(detail.tapCount);
     });
@@ -113,7 +114,7 @@ run('path criteria accepts normalized alternatives and rejects wrong turns', () 
 
     hand.on('left>down', () => wrong++);
     hand.on('down>right', () => matched++);
-    hand.when('path', { path: ['left>down', 'down>right'] }, () => criteria++);
+    hand.on('path', { path: ['left>down', 'down>right'] }, () => criteria++, { phase: 'observe' });
 
     hand.pointerDown(pointerEvent(node, 1, 100, 100));
     t = 40;
@@ -131,7 +132,7 @@ run('rolling tap movement cancels rolling recognition', () => {
     let t = 0;
     const { node, hand } = create({
         clock: () => t,
-        intent: { events: ['rollingtap'] },
+        intent: { events: ['rolling'] },
         pan: { enabled: false },
         swipe: { enabled: false },
         pinch: { enabled: false },
@@ -140,7 +141,7 @@ run('rolling tap movement cancels rolling recognition', () => {
     });
     let rolling = 0;
 
-    hand.on('rollingtap', () => rolling++);
+    hand.on('rolling', () => rolling++);
 
     hand.pointerDown(pointerEvent(node, 1, 100, 100));
     t = 45;
@@ -157,7 +158,7 @@ run('slow staggered two-finger input remains a normal tap when rolling is unregi
     let t = 0;
     const { node, hand } = create({
         clock: () => t,
-        intent: { events: ['2fingertap'] },
+        intent: { events: ['tap'] },
         pan: { enabled: false },
         swipe: { enabled: false },
         pinch: { enabled: false },
@@ -168,8 +169,8 @@ run('slow staggered two-finger input remains a normal tap when rolling is unregi
     let two = 0;
     let rolling = 0;
 
-    hand.on('2fingertap', () => two++);
-    hand.on('rollingtap', () => rolling++);
+    hand.on('tap', { fingers: 2 }, () => two++);
+    hand.on('rolling', () => rolling++);
 
     hand.pointerDown(pointerEvent(node, 1, 100, 100));
     t = 110;
@@ -186,7 +187,7 @@ run('modifier anchor movement cancels modifier pan', () => {
     let t = 0;
     const { node, hand } = create({
         clock: () => t,
-        intent: { events: ['modifierpan'] },
+        intent: { events: ['pan:mod'] },
         pan: { enabled: false },
         swipe: { enabled: false },
         pinch: { enabled: false },
@@ -195,7 +196,7 @@ run('modifier anchor movement cancels modifier pan', () => {
     });
     let pans = 0;
 
-    hand.on('modifierpan', () => pans++);
+    hand.on('pan:mod', () => pans++);
 
     hand.pointerDown(pointerEvent(node, 1, 80, 80));
     t = 140;
@@ -236,7 +237,7 @@ run('keyboard modifier combos are exact and do not leak wider combos', () => {
     let modifiers = 0;
     let taps = 0;
 
-    hand.on('modifiertap', () => modifiers++);
+    hand.on('tap:mod', () => modifiers++);
     hand.on('tap', () => taps++);
 
     tap(hand, node, 50, 50, { shiftKey: true, altKey: true });
@@ -278,14 +279,14 @@ run('wheel page mode uses target height and can prevent native wheel', () => {
         input: 'mouse',
         windowEvents: false,
         preventDefault: false,
-        intent: { events: ['wheelzoom'] },
+        intent: { events: ['wheel:zoom'] },
         wheel: { enabled: true, preventDefault: true, normalize: true, zoomFactor: 0.001 },
         press: { enabled: false }
     });
     let prevented = 0;
     let detail = null;
 
-    hand.on('wheelzoom', event => {
+    hand.on('wheel:zoom', event => {
         detail = event;
     });
     hand.wheel(Object.assign(mouseEvent(node, 200, 150), {
@@ -394,7 +395,7 @@ run('ignore function receives target event and instance', () => {
         }
     });
 
-    hand.on('ignored', () => ignoredCount++);
+    hand.on('input:ignored', () => ignoredCount++);
     hand.mouseDown(mouseEvent(ignored, 20, 20));
 
     assert.strictEqual(received, true);

@@ -111,7 +111,7 @@ run('sequence direction-specific swipes use explicit tap atoms', () => {
     });
     let matched = 0;
 
-    hand.on('tap>tap>swiperight', () => matched++);
+    hand.on('tap>tap>swipe:right', () => matched++);
 
     hand.mouseDown(mouseEvent(node, 40, 50));
     hand.mouseUp(mouseEvent(node, 40, 50, { buttons: 0 }));
@@ -127,12 +127,12 @@ run('sequence direction-specific swipes use explicit tap atoms', () => {
     assert.strictEqual(matched, 1);
 });
 
-run('tap tap swipe wins over direct doubletap and swipe handlers', () => {
+run('tap tap swipe wins over direct tap:2x and swipe handlers', () => {
     let t = 0;
     const { node, hand } = createMouse({
         clock: () => t,
         intent: {
-            events: ['tap>tap>swipe', 'doubletap', 'swiperight']
+            events: ['tap>tap>swipe', 'tap:2x', 'swipe:right']
         }
     });
     let sequence = 0;
@@ -144,8 +144,8 @@ run('tap tap swipe wins over direct doubletap and swipe handlers', () => {
         sequence++;
         sequenceDetail = detail;
     });
-    hand.on('doubletap', () => directDouble++);
-    hand.on('swiperight', () => directSwipe++);
+    hand.on('tap:2x', () => directDouble++);
+    hand.on('swipe:right', () => directSwipe++);
 
     hand.mouseDown(mouseEvent(node, 40, 50));
     hand.mouseUp(mouseEvent(node, 40, 50, { buttons: 0 }));
@@ -166,12 +166,12 @@ run('tap tap swipe wins over direct doubletap and swipe handlers', () => {
     assert.strictEqual(sequenceDetail.gestureSequence.gestures.length, 3);
 });
 
-run('doubletap sequence alias requires two taps and beats tap swipe', () => {
+run('tap:2x sequence alias requires two taps and beats tap swipe', () => {
     let t = 0;
     const { node, hand } = createMouse({
         clock: () => t,
         intent: {
-            events: ['tap>swiperight', 'doubletap>swiperight', 'doubletap', 'swiperight']
+            events: ['tap>swipe:right', 'tap:2x>swipe:right', 'tap:2x', 'swipe:right']
         }
     });
     let tapSwipe = 0;
@@ -179,12 +179,12 @@ run('doubletap sequence alias requires two taps and beats tap swipe', () => {
     let directDouble = 0;
     let directSwipe = 0;
 
-    hand.on('tap>swiperight', () => tapSwipe++);
-    hand.on('doubletap>swiperight', detail => {
+    hand.on('tap>swipe:right', () => tapSwipe++);
+    hand.on('tap:2x>swipe:right', detail => {
         doubleSwipe = detail;
     });
-    hand.on('doubletap', () => directDouble++);
-    hand.on('swiperight', () => directSwipe++);
+    hand.on('tap:2x', () => directDouble++);
+    hand.on('swipe:right', () => directSwipe++);
 
     hand.mouseDown(mouseEvent(node, 40, 50));
     hand.mouseUp(mouseEvent(node, 40, 50, { buttons: 0 }));
@@ -200,24 +200,24 @@ run('doubletap sequence alias requires two taps and beats tap swipe', () => {
     assert.strictEqual(tapSwipe, 0);
     assert.ok(doubleSwipe);
     assert.deepStrictEqual(doubleSwipe.sequence, ['tap', 'tap', 'swipe']);
-    assert.deepStrictEqual(doubleSwipe.gestureSequence.pattern, ['doubletap', 'swiperight']);
+    assert.deepStrictEqual(doubleSwipe.gestureSequence.pattern, ['tap:2x', 'swipe:right']);
     assert.strictEqual(directDouble, 0);
     assert.strictEqual(directSwipe, 0);
 });
 
-run('doubletap sequence alias does not match a single tap swipe', () => {
+run('tap:2x sequence alias does not match a single tap swipe', () => {
     let t = 0;
     const { node, hand } = createMouse({
         clock: () => t,
         intent: {
-            events: ['doubletap>swiperight', 'swiperight']
+            events: ['tap:2x>swipe:right', 'swipe:right']
         }
     });
     let doubleSwipe = 0;
     let directSwipe = 0;
 
-    hand.on('doubletap>swiperight', () => doubleSwipe++);
-    hand.on('swiperight', () => directSwipe++);
+    hand.on('tap:2x>swipe:right', () => doubleSwipe++);
+    hand.on('swipe:right', () => directSwipe++);
 
     hand.mouseDown(mouseEvent(node, 40, 50));
     hand.mouseUp(mouseEvent(node, 40, 50, { buttons: 0 }));
@@ -236,13 +236,13 @@ run('tap tap tap swipe uses explicit tap atoms', () => {
     const { node, hand } = createMouse({
         clock: () => t,
         intent: {
-            events: ['tap>tap>tap>swiperight']
+            events: ['tap>tap>tap>swipe:right']
         }
     });
     let matched = 0;
     let matchedDetail = null;
 
-    hand.on('tap>tap>tap>swiperight', detail => {
+    hand.on('tap>tap>tap>swipe:right', detail => {
         matched++;
         matchedDetail = detail;
     });
@@ -263,23 +263,23 @@ run('tap tap tap swipe uses explicit tap atoms', () => {
 
     assert.strictEqual(matched, 1);
     assert.deepStrictEqual(matchedDetail.sequence, ['tap', 'tap', 'tap', 'swipe']);
-    assert.deepStrictEqual(matchedDetail.gestureSequence.pattern, ['tap', 'tap', 'tap', 'swiperight']);
+    assert.deepStrictEqual(matchedDetail.gestureSequence.pattern, ['tap', 'tap', 'tap', 'swipe:right']);
     assert.strictEqual(matchedDetail.gestureSequence.gestures.length, 4);
 });
 
-run('tripletap sequence alias beats doubletap sequence alias', () => {
+run('tap:3x sequence alias beats tap:2x sequence alias', () => {
     let t = 0;
     const { node, hand } = createMouse({
         clock: () => t,
         intent: {
-            events: ['doubletap>swiperight', 'tripletap>swiperight']
+            events: ['tap:2x>swipe:right', 'tap:3x>swipe:right']
         }
     });
     let doubleSwipe = 0;
     let tripleSwipe = null;
 
-    hand.on('doubletap>swiperight', () => doubleSwipe++);
-    hand.on('tripletap>swiperight', detail => {
+    hand.on('tap:2x>swipe:right', () => doubleSwipe++);
+    hand.on('tap:3x>swipe:right', detail => {
         tripleSwipe = detail;
     });
 
@@ -300,10 +300,10 @@ run('tripletap sequence alias beats doubletap sequence alias', () => {
     assert.strictEqual(doubleSwipe, 0);
     assert.ok(tripleSwipe);
     assert.deepStrictEqual(tripleSwipe.sequence, ['tap', 'tap', 'tap', 'swipe']);
-    assert.deepStrictEqual(tripleSwipe.gestureSequence.pattern, ['tripletap', 'swiperight']);
+    assert.deepStrictEqual(tripleSwipe.gestureSequence.pattern, ['tap:3x', 'swipe:right']);
 });
 
-run('sequence callbacks match rolling and modifier base gestures', () => {
+run('sequence listeners match rolling and modifier base gestures', () => {
     let t = 0;
     const node = target();
     const hand = new HandTrick(node, {
@@ -318,13 +318,13 @@ run('sequence callbacks match rolling and modifier base gestures', () => {
         pinch: { enabled: false },
         rotate: { enabled: false },
         intent: {
-            events: ['rollingtap', 'modifiertap']
+            events: ['rolling', 'tap:mod']
         }
     });
     let rollingSequence = 0;
     let modifierSequence = 0;
 
-    hand.on('rollingtap>modifiertap', () => {
+    hand.on('rolling>tap:mod', () => {
         rollingSequence++;
     });
     hand.on('rolling>modifier', () => {
@@ -354,8 +354,8 @@ run('sequence specificity: direction-specific swipes', () => {
     const { node, hand } = createMouse({ clock: () => t });
     let right = 0;
     let left = 0;
-    hand.on('tap>swiperight', () => right++);
-    hand.on('tap>swipeleft', () => left++);
+    hand.on('tap>swipe:right', () => right++);
+    hand.on('tap>swipe:left', () => left++);
 
     // Tap + Swipe Right
     hand.mouseDown(mouseEvent(node, 40, 50));
@@ -386,7 +386,7 @@ run('sequence specificity: explicit tap atom counts', () => {
     let single = 0;
     let double = 0;
     let triple = 0;
-    hand.on('singletap>swipe', () => single++);
+    hand.on('tap:1x>swipe', () => single++);
     hand.on('tap>tap>swipe', () => double++);
     hand.on('tap>tap>tap>swipe', () => triple++);
 
@@ -398,7 +398,7 @@ run('sequence specificity: explicit tap atom counts', () => {
         hand.mouseUp(mouseEvent(node, 150, 50, { buttons: 0 }));
     };
 
-    // singletap>swipe
+    // tap:1x>swipe
     hand.mouseDown(mouseEvent(node, 40, 50));
     hand.mouseUp(mouseEvent(node, 40, 50, { buttons: 0 }));
     swipe();
@@ -429,67 +429,23 @@ run('sequence specificity: explicit tap atom counts', () => {
     assert.strictEqual(triple, 1);
 });
 
-run('sequence specificity: finger count aliases', () => {
-    let t = 0;
-    const node = target();
-    const hand = new HandTrick(node, {
-        input: 'pointer',
-        clock: () => t,
-        windowEvents: false,
-        tapHold: { enabled: false },
-        swipe: {
-            distanceByFingers: { 1: 60, 2: 60 },
-            minTime: 0,
-            minSamples: 1,
-            confidenceDelay: 0,
-            intentDistance: 10
-        },
-        intent: {
-            events: ['1fingertap>swipe', '2fingertap>swipe']
-        }
-    });
-    let oneFinger = 0;
-    let twoFinger = 0;
-    hand.on('1fingertap>swipe', () => oneFinger++);
-    hand.on('2fingertap>swipe', () => twoFinger++);
-
-    // 1 finger tap + swipe
-    hand.pointerDown(pointerEvent(node, 1, 40, 50));
-    hand.pointerUp(pointerEvent(node, 1, 40, 50, { buttons: 0 }));
-    t += 100;
-    hand.pointerDown(pointerEvent(node, 1, 50, 50));
-    t += 50;
-    hand.pointerMove(pointerEvent(node, 1, 150, 50));
-    hand.pointerUp(pointerEvent(node, 1, 150, 50, { buttons: 0 }));
-
-    // 2 finger tap + swipe
-    t += 1000;
-    hand.pointerDown(pointerEvent(node, 1, 40, 50));
-    hand.pointerDown(pointerEvent(node, 2, 60, 50));
-    t += 50;
-    hand.pointerUp(pointerEvent(node, 2, 60, 50, { buttons: 0 }));
-    hand.pointerUp(pointerEvent(node, 1, 40, 50, { buttons: 0 }));
-    t += 100;
-    hand.pointerDown(pointerEvent(node, 1, 50, 50));
-    t += 50;
-    hand.pointerMove(pointerEvent(node, 1, 150, 50));
-    hand.pointerUp(pointerEvent(node, 1, 150, 50, { buttons: 0 }));
-
-    assert.strictEqual(oneFinger, 1, 'Should match 1fingertap>swipe');
-    assert.strictEqual(twoFinger, 1, 'Should match 2fingertap>swipe');
+run('finger count aliases are invalid inside sequences', () => {
+    assert.strictEqual(HandTrick.isEvent('tap:1f>swipe'), false);
+    assert.strictEqual(HandTrick.isEvent('tap:2f>swipe'), false);
+    assert.strictEqual(HandTrick.isEvent('tap:2f:2x>swipe:right'), false);
 });
 
-run('generated finger doubletap aliases work inside sequences', () => {
+run('tap count aliases work inside sequences with criteria on final detail', () => {
     let t = 0;
     const { node, hand } = createMouse({
         clock: () => t,
         intent: {
-            events: ['2fingerdoubletap>swiperight']
+            events: ['tap:2x>swipe:right']
         }
     });
     let matched = null;
 
-    hand.on('2fingerdoubletap>swiperight', detail => {
+    hand.on('tap:2x>swipe:right', { fingers: 2 }, detail => {
         matched = detail;
     });
 
@@ -507,7 +463,42 @@ run('generated finger doubletap aliases work inside sequences', () => {
     assert.ok(matched);
     assert.strictEqual(matched.fingers, 2);
     assert.strictEqual(matched.fingerSource, 'keyboard');
-    assert.deepStrictEqual(matched.gestureSequence.pattern, ['2fingerdoubletap', 'swiperight']);
+    assert.deepStrictEqual(matched.gestureSequence.pattern, ['tap:2x', 'swipe:right']);
+});
+
+run('sequence criteria preserves first gesture routing', () => {
+    let t = 0;
+    const { node, hand } = createMouse({
+        clock: () => t,
+        intent: {
+            events: ['tap>swipe:left']
+        }
+    });
+    let matched = null;
+    let wrong = 0;
+
+    hand.on('tap>swipe:left', { sequence: [{ fingers: 3, fingerSource: 'keyboard', keyboardRole: 'threeFingers' }] }, detail => {
+        matched = detail;
+    });
+    hand.on('tap>swipe:left', { sequence: [{ fingers: 2 }] }, () => {
+        wrong++;
+    });
+
+    hand.mouseDown(mouseEvent(node, 40, 50, { ctrlKey: true }));
+    hand.mouseUp(mouseEvent(node, 40, 50, { buttons: 0, ctrlKey: true }));
+    t = 120;
+    hand.mouseDown(mouseEvent(node, 150, 50));
+    t = 180;
+    hand.mouseMove(mouseEvent(node, 50, 50));
+    hand.mouseUp(mouseEvent(node, 50, 50, { buttons: 0 }));
+
+    assert.ok(matched);
+    assert.strictEqual(wrong, 0);
+    assert.strictEqual(matched.fingers, 1);
+    assert.strictEqual(matched.gestureSequence.gestures[0].fingers, 3);
+    assert.strictEqual(matched.gestureSequence.gestures[0].fingerSource, 'keyboard');
+    assert.strictEqual(matched.gestureSequence.gestures[0].keyboardRole, 'threeFingers');
+    assert.strictEqual(matched.gestureSequence.gestures[1].fingers, 1);
 });
 
 run('sequence negative matching: length mismatch and interruption', () => {

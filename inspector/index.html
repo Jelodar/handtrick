@@ -25,6 +25,7 @@
     body {
         display: grid;
         grid-template-columns: minmax(0, 1fr) 360px;
+        min-height: 0;
     }
 
     button {
@@ -143,6 +144,8 @@
 
     aside {
         min-width: 0;
+        min-height: 0;
+        height: 100vh;
         display: grid;
         grid-template-rows: auto auto auto minmax(0, 1fr);
         border-left: 1px solid rgba(255,255,255,0.1);
@@ -183,7 +186,7 @@
 
     .summary {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(4, 1fr);
         gap: 1px;
         border-bottom: 1px solid rgba(255,255,255,0.1);
     }
@@ -209,10 +212,17 @@
     }
 
     .tools {
+        min-height: 0;
+        max-height: min(46vh, 470px);
+        overflow: auto;
         display: grid;
         gap: 10px;
         padding: 12px;
         border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    body.tools-closed .tools {
+        display: none;
     }
 
     .filters,
@@ -220,6 +230,15 @@
         display: flex;
         flex-wrap: wrap;
         gap: 6px;
+    }
+
+    .event-picks,
+    .scenarios,
+    .tuning {
+        min-height: 0;
+        max-height: 132px;
+        overflow: auto;
+        padding-right: 2px;
     }
 
     .tuning {
@@ -300,19 +319,56 @@
         gap: 6px;
     }
 
-    #search {
+    #search,
+    #router-selector,
+    #router-criteria,
+    #router-method {
         min-width: 0;
-        height: 32px;
         border: 1px solid rgba(255,255,255,0.18);
         background: transparent;
         color: #fff;
-        padding: 0 9px;
         font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         outline: 0;
     }
 
+    #search,
+    #router-selector,
+    #router-method {
+        height: 32px;
+        padding: 0 9px;
+    }
+
+    #router-criteria {
+        min-height: 72px;
+        padding: 9px;
+        resize: vertical;
+        line-height: 1.45;
+    }
+
+    .router {
+        display: grid;
+        gap: 7px;
+        border-top: 1px solid rgba(255,255,255,0.08);
+        padding-top: 9px;
+    }
+
+    .router-grid,
+    .router-actions {
+        display: grid;
+        grid-template-columns: 94px minmax(0, 1fr);
+        gap: 6px;
+    }
+
+    #router-status {
+        min-height: 16px;
+        color: rgba(255,255,255,0.54);
+        font: 11px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        overflow-wrap: anywhere;
+    }
+
     #events {
         min-height: 0;
+        max-height: 100%;
         overflow: auto;
     }
 
@@ -430,10 +486,15 @@
 
         .tools {
             display: none;
+            max-height: 42vh;
         }
 
         body.tools-open .tools {
             display: grid;
+        }
+
+        body.tools-closed .tools {
+            display: none;
         }
 
         #hud {
@@ -478,15 +539,15 @@
             <div id="guide">
             <div class="guide-cell">Tap once, double tap, then try tap tap swipe right to see exclusive sequences and alias expansion</div>
             <div class="guide-cell">Roll two or three fingers left/right like a table tap wave; close double taps stay normal taps</div>
-            <div class="guide-cell">Alt acts as two fingers. Ctrl acts as three. Meta-click chains emit rolling tap. Shift starts modifier drag.</div>
-            <div class="guide-cell">Draw down then right for a path. Pinch, twist, wheel, and inspect payload fields.</div>
+            <div class="guide-cell">Alt acts as 2F. Ctrl acts as 3F. Shift+Meta acts as 4F. Meta-click chains emit rolling tap. Shift starts modifier drag.</div>
+            <div class="guide-cell">Draw down-right, then a clockwise square once and twice. Longer path listeners beat shorter prefixes and criteria.</div>
         </div>
     </main>
     <aside>
         <div class="head">
             <div class="title">
                 <h1>WORKBENCH</h1>
-                <p>Semantic event stream with common fields first.</p>
+                <p>Semantic event stream. Local module entry: ../handtrick.mjs.</p>
             </div>
             <div class="actions">
                 <button id="tools">TOOLS</button>
@@ -498,6 +559,7 @@
             <div><span>STATE</span><b id="s-state">enabled</b></div>
             <div><span>EVENTS</span><b id="s-count">0</b></div>
             <div><span>CLAIM</span><b id="s-claim">no</b></div>
+            <div><span>ENTRY</span><b>mjs</b></div>
         </div>
         <div class="tools">
             <div class="filters">
@@ -510,16 +572,36 @@
                 <input id="search" type="search" placeholder="filter">
                 <button id="group" class="active">GROUP</button>
             </div>
+            <div class="router">
+                <div class="router-grid">
+                    <select id="router-method">
+                        <option>command</option>
+                        <option>on</option>
+                        <option>observe</option>
+                    </select>
+                    <input id="router-selector" value="swipe:right" spellcheck="false">
+                </div>
+                <textarea id="router-criteria" spellcheck="false">{
+  "speed": "flick"
+}</textarea>
+                <div class="router-actions">
+                    <button id="router-apply">ROUTE</button>
+                    <button id="router-clear">CLEAR ROUTE</button>
+                </div>
+                <div id="router-status">router idle</div>
+            </div>
             <div class="event-picks" id="event-picks"></div>
             <div class="scenarios">
                 <div class="scenario"><b>TAP</b><span>Tap center, double tap, then try a wider two-finger tap to compare against roll.</span></div>
                 <div class="scenario"><b>ROLL</b><span>Roll two or three fingers left/right with staggered downs. Meta-click two or three points in a line mirrors it on desktop.</span></div>
-                <div class="scenario"><b>SEQ</b><span>Tap, tap, swipe right. Try toggling doubletap&gt;swipe and tap&gt;swipe to inspect longest-match resolution.</span></div>
-                <div class="scenario"><b>PATH</b><span>Hold and draw down then right, or left then up. Sharp turns produce bare path events and consume conflicting swipes.</span></div>
+                <div class="scenario"><b>SEQ</b><span>Tap, tap, swipe right. Try toggling tap:2x&gt;swipe and tap&gt;swipe to inspect longest-match resolution.</span></div>
+                <div class="scenario"><b>PATH</b><span>Draw down-right, left-up, or a clockwise square twice. Longer named paths and path criteria suppress shorter prefixes.</span></div>
                 <div class="scenario"><b>MOD</b><span>Hold one pointer, tap or drag another. Shift+drag tests the keyboard modifier path.</span></div>
+                <div class="scenario"><b>KEYS</b><span>Alt=2F, Ctrl=3F, Shift+Meta=4F. Use fingerSource:auto to keep commands source-neutral.</span></div>
                 <div class="scenario"><b>VIEW</b><span>Pinch, twist, wheel, and inspect scale, raw rotation, confidence, region, and source fields.</span></div>
                 <div class="scenario"><b>NOISE</b><span>Try near-simultaneous two-finger taps, shaky rolls, slow rolls, and off-axis rolls to inspect rejection boundaries.</span></div>
                 <div class="scenario"><b>AREA</b><span>Start in corners, edges, bottom band, and outside the surface to compare region, edgeRegion, area, and grid data.</span></div>
+                <div class="scenario"><b>ROUTE</b><span>Use the router panel for one selector plus criteria. Try swipe:right with speed=flick, then switch to observe.</span></div>
                 <div class="scenario"><b>PAYLOAD</b><span>Open any event row to inspect ordered fields, gestureSequence, rolling gaps, modifier positions, and keyboard source metadata.</span></div>
             </div>
             <div class="tuning" id="tuning">
@@ -553,6 +635,14 @@
     const eventPicks = document.getElementById('event-picks');
     const searchInput = document.getElementById('search');
     const groupButton = document.getElementById('group');
+    const router = {
+        method: document.getElementById('router-method'),
+        selector: document.getElementById('router-selector'),
+        criteria: document.getElementById('router-criteria'),
+        apply: document.getElementById('router-apply'),
+        clear: document.getElementById('router-clear'),
+        status: document.getElementById('router-status')
+    };
     const tuneInputs = Array.from(document.querySelectorAll('[data-tune]'));
     const modal = document.getElementById('modal');
     const modalTitle = document.getElementById('modal-title');
@@ -585,11 +675,11 @@
     };
     const eventStore = [];
     const lifecycleEvents = new Set(HandTrick.groups.lifecycle);
-    const baseEvents = new Set(['tap', 'press', 'pan', 'swipe', 'pinch', 'rotate', 'path', 'rollingtap', 'modifiertap', 'modifierpan', 'wheelzoom'].filter(type => HandTrick.events.includes(type)));
+    const baseEvents = new Set(['tap', 'press', 'pan', 'swipe', 'pinch', 'rotate', 'path', 'rolling', 'tap:mod', 'pan:mod', 'wheel:zoom'].filter(type => HandTrick.events.includes(type)));
     const detailEvents = new Set(HandTrick.events.filter(type => !lifecycleEvents.has(type) && !baseEvents.has(type)));
-    const eventChoices = Array.from(baseEvents).concat('2fingertap', '3fingertap', '2fingerrollingtap', '3fingerrollingtap', 'tap>swipe', 'tap>tap>swipe', 'doubletap>swipe', 'tripletap>swipe', 'tap>tap>tap>swipe', '2fingertap>swipe', 'down>right', 'left>up');
+    const eventChoices = Array.from(baseEvents).concat('tap:2x', 'tap:3x', 'swipe:left', 'swipe:right', 'swipe:up', 'swipe:down', 'swipe:mod:right', 'rolling:left', 'rolling:right', 'circle', 'circle:cw', 'arc:up', 'tap>swipe', 'tap>tap>swipe', 'tap:2x>swipe', 'tap:3x>swipe', 'tap>tap>tap>swipe', 'down>right', 'left>up', 'right>down>left>up', 'right>down>left>up>right>down>left>up').filter((type, index, list) => list.indexOf(type) === index);
     const exactEvents = eventChoices.filter(type => type.indexOf('>') >= 0);
-    const registeredEvents = new Set(eventChoices.filter(type => type !== 'doubletap>swipe' && type !== 'tripletap>swipe'));
+    const registeredEvents = new Set(eventChoices.filter(type => type !== 'tap:2x>swipe' && type !== 'tap:3x>swipe'));
     const stream = {
         filter: 'intent',
         search: '',
@@ -603,6 +693,7 @@
     let flashTimer = 0;
     let modalOpen = false;
     let renderPending = false;
+    let routerBinding = null;
 
     function apply() {
         target.style.left = (surface.clientWidth / 2 + state.x) + 'px';
@@ -649,20 +740,21 @@
         if (type.indexOf('>') >= 0) return type;
         if (baseEvents.has(type)) return type;
         if (type.indexOf('tap') >= 0) return 'tap';
-        if (type.indexOf('swipe') === 0 || type === 'flick') return 'swipe';
+        if (type.indexOf('swipe') === 0) return 'swipe';
         if (type.indexOf('pinch') === 0) return 'pinch';
         if (type.indexOf('rotate') === 0) return 'rotate';
         if (type.indexOf('press') === 0) return 'press';
-        if (type.indexOf('modifier') === 0) return type.indexOf('pan') >= 0 ? 'modifierpan' : 'modifiertap';
-        if (type.indexOf('rollingtap') === 0 || type.indexOf('rolling') >= 0) return 'rollingtap';
-        if (type === 'wheel' || type === 'wheelzoom') return 'wheelzoom';
+        if (type.indexOf('pan:mod') === 0) return 'pan:mod';
+        if (type.indexOf('tap:mod') === 0) return 'tap:mod';
+        if (type.indexOf('rolling') === 0 || type.indexOf('rolling') >= 0) return 'rolling';
+        if (type === 'wheel' || type === 'wheel:zoom') return 'wheel:zoom';
         return type;
     }
 
     function isRegistered(event) {
         const group = eventGroup(event.type);
         if (registeredEvents.has(event.type) || registeredEvents.has(group)) return true;
-        return event.type === 'gesturecommit' && event.gesture && registeredEvents.has(event.gesture);
+        return event.type === 'gesture:commit' && event.gesture && registeredEvents.has(event.gesture);
     }
 
     function isIntentEvent(event) {
@@ -699,6 +791,8 @@
         if (event.tapCount) values.push(event.tapCount + 'x');
         if (event.rolling) values.push('rolling ' + event.rolling.count + 'F');
         if (event.rolling && event.rolling.overlapCount) values.push('overlap ' + event.rolling.overlapCount);
+        if (event.pathMatched) values.push('matched ' + event.pathMatched);
+        else if (event.pathText) values.push('path ' + event.pathText);
         if (event.tapHold) values.push('tap-hold');
         if (event.modifier) values.push('modifier');
         if (event.keyboardSubstitute) values.push(event.keyboardSubstitute.role);
@@ -804,7 +898,7 @@
         }
         eventsEl.innerHTML = entries.map(entry => {
             const chips = entry.flags.map(flag => {
-                const cls = flag.indexOf('modifier') >= 0 || flag.indexOf('intent') >= 0 ? ' hot' : flag.indexOf('cancel') >= 0 ? ' warn' : '';
+                const cls = flag.indexOf(':mod') >= 0 || flag.indexOf('intent') >= 0 ? ' hot' : flag.indexOf('cancel') >= 0 ? ' warn' : '';
                 return '<span class="chip' + cls + '">' + escapeHtml(flag) + '</span>';
             }).join('');
             const count = entry.count > 1 ? ' <span class="event-count">x' + entry.count + '</span>' : '';
@@ -896,6 +990,51 @@
         metrics.state.textContent = 'enabled';
     }
 
+    function parseRouterCriteria() {
+        const raw = router.criteria.value.trim();
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') throw new Error('criteria must be an object');
+        return parsed;
+    }
+
+    function clearRouter(status) {
+        if (routerBinding) hand.off(routerBinding.type, routerBinding.handler);
+        routerBinding = null;
+        router.status.textContent = status || 'router cleared';
+    }
+
+    function routerLine(event) {
+        return [
+            'matched ' + event.type,
+            event.speed ? 'speed=' + event.speed : '',
+            event.direction && event.direction !== 'none' ? 'dir=' + event.direction : '',
+            event.fingers ? 'f=' + event.fingers : ''
+        ].filter(Boolean).join('  ');
+    }
+
+    function applyRouter() {
+        const selector = router.selector.value.trim();
+        const method = router.method.value;
+        let criteria = null;
+        try {
+            if (!HandTrick.isEvent(selector)) throw new Error('invalid selector');
+            criteria = parseRouterCriteria();
+            clearRouter('');
+            const handler = event => {
+                router.status.textContent = routerLine(event);
+                flash();
+                updateMetrics(event);
+            };
+            if (criteria) hand[method](selector, criteria, handler);
+            else hand[method](selector, handler);
+            routerBinding = { type: selector, handler };
+            router.status.textContent = method + ' ' + selector;
+        } catch (error) {
+            router.status.textContent = error.message;
+        }
+    }
+
     const hand = new HandTrick(surface, {
         input: 'auto',
         preventDefault: false,
@@ -939,7 +1078,7 @@
         store(event);
     });
 
-    hand.on('panstart', event => {
+    hand.on('pan:start', event => {
         startDrag(event.center);
     });
 
@@ -947,15 +1086,15 @@
         moveDrag(event.center);
     });
 
-    hand.on('modifierpanstart', event => {
+    hand.on('pan:mod:start', event => {
         startDrag(event.actionPointer || event.center);
     });
 
-    hand.on('modifierpan', event => {
+    hand.on('pan:mod', event => {
         moveDrag(event.actionPointer || event.center);
     });
 
-    hand.on('pinchstart', () => {
+    hand.on('pinch:start', () => {
         state.startScale = state.scale;
     });
 
@@ -964,7 +1103,7 @@
         apply();
     });
 
-    hand.on('rotatestart', () => {
+    hand.on('rotate:start', () => {
         state.startRotation = state.rotation;
     });
 
@@ -973,13 +1112,13 @@
         apply();
     });
 
-    hand.on('wheelzoom', event => {
+    hand.on('wheel:zoom', event => {
         state.scale = Math.max(0.25, Math.min(4, state.scale * event.scale));
         apply();
     });
 
-    ['tap', 'tapsequence', 'multitap', 'press', 'swipe', 'flick', 'rollingtap', 'modifiertap', 'pressurechange'].forEach(type => {
-        hand.on(type, flash);
+    ['tap', 'tap:sequence', 'tap:multi', 'press', 'swipe', 'rolling', 'tap:mod', 'pressure:change'].forEach(type => {
+        hand.observe(type, flash);
     });
     exactEvents.forEach(type => {
         if (registeredEvents.has(type)) hand.on(type, flash);
@@ -1009,6 +1148,9 @@
         groupButton.classList.toggle('active', stream.group);
     });
 
+    router.apply.addEventListener('click', applyRouter);
+    router.clear.addEventListener('click', () => clearRouter());
+
     eventPicks.addEventListener('click', event => {
         const button = event.target.closest('[data-event]');
         if (!button) return;
@@ -1026,7 +1168,8 @@
     document.getElementById('close').addEventListener('click', closeModal);
 
     document.getElementById('tools').addEventListener('click', () => {
-        document.body.classList.toggle('tools-open');
+        if (mobileQuery.matches) document.body.classList.toggle('tools-open');
+        else document.body.classList.toggle('tools-closed');
         renderEvents();
     });
 
@@ -1071,6 +1214,7 @@
     apply();
     applyTuning();
     renderEventPicks();
+    applyRouter();
     renderEvents();
 </script>
 </body>

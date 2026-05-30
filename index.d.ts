@@ -6,11 +6,10 @@ declare class HandTrick {
     enabled: boolean;
     destroyed: boolean;
 
-    static version: string;
     static events: string[];
-    static gestures: string[];
+    static recognizers: string[];
+    static families: string[];
     static groups: Record<string, string[]>;
-    static aliases: Record<string, string>;
     static presets: Record<string, (options?: HandTrick.Options) => HandTrick.Options>;
     static defaults: HandTrick.Options;
     static create(target: EventTarget, options?: HandTrick.PresetInput): HandTrick;
@@ -20,21 +19,25 @@ declare class HandTrick {
     static matches(event: HandTrick.Detail, criteria?: HandTrick.Criteria): boolean;
     static keyCombo(value: string | string[]): string;
     static path(value: string | string[]): string;
+    static event(value: HandTrick.EventName | string): string;
+    static isEvent(value: HandTrick.EventName | string): boolean;
 
-    on(type: HandTrick.EventName, handler: HandTrick.Handler): this;
-    on(type: HandTrick.EventName, criteria: HandTrick.Criteria, handler: HandTrick.Handler): this;
-    once(type: HandTrick.EventName, handler: HandTrick.Handler): this;
-    once(type: HandTrick.EventName, criteria: HandTrick.Criteria, handler: HandTrick.Handler): this;
+    on(type: HandTrick.EventName, handler: HandTrick.Handler, options?: HandTrick.ListenerOptions): this;
+    on(type: HandTrick.EventName, criteria: HandTrick.Criteria, handler: HandTrick.Handler, options?: HandTrick.ListenerOptions): this;
+    once(type: HandTrick.EventName, handler: HandTrick.Handler, options?: HandTrick.ListenerOptions): this;
+    once(type: HandTrick.EventName, criteria: HandTrick.Criteria, handler: HandTrick.Handler, options?: HandTrick.ListenerOptions): this;
     off(type?: HandTrick.EventName, handler?: HandTrick.Handler): this;
-    when(type: HandTrick.EventName, criteria: HandTrick.Criteria, handler: HandTrick.Handler): this;
-    when(type: HandTrick.EventName, handler: HandTrick.Handler): this;
+    command(type: HandTrick.EventName, handler: HandTrick.Handler): this;
+    command(type: HandTrick.EventName, criteria: HandTrick.Criteria, handler: HandTrick.Handler): this;
+    observe(type: HandTrick.EventName, handler: HandTrick.Handler): this;
+    observe(type: HandTrick.EventName, criteria: HandTrick.Criteria, handler: HandTrick.Handler): this;
     setOptions(options?: HandTrick.PresetInput): this;
     enable(): this;
     disable(): this;
     cancel(reason?: string, extra?: Partial<HandTrick.Detail>): this;
     resetTaps(): this;
     resetSequences(): this;
-    reset(options?: { taps?: boolean; gestures?: boolean; sequences?: boolean }): this;
+    reset(options?: { taps?: boolean; sequences?: boolean }): this;
     refreshRect(): this;
     getIntentState(): HandTrick.IntentState;
     getState(): HandTrick.State;
@@ -44,85 +47,106 @@ declare class HandTrick {
 declare namespace HandTrick {
     type EventName = KnownEventName | string;
     type Handler = (event: Detail) => void;
+    type ListenerPhase = 'command' | 'observe' | 'intent' | 'update';
+    interface ListenerOptions {
+        phase?: ListenerPhase;
+    }
     type PresetInput = string | Options | ((options?: Options) => Options) | Array<string | Options | ((options?: Options) => Options)>;
+    type SwipeDirection = 'left' | 'right' | 'up' | 'down';
+    type PinchDirection = 'in' | 'out';
+    type RotateDirection = 'cw' | 'ccw';
+    type CircleDirection = RotateDirection;
+    type ArcDirection = SwipeDirection;
+    type CircleEventName =
+        | 'circle'
+        | `circle:${CircleDirection}`
+        | `circle:${number}x`
+        | `circle:${number}x:${CircleDirection}`
+        | `circle:${CircleDirection}:${number}x`;
+    type ArcEventName =
+        | 'arc'
+        | `arc:${ArcDirection}`;
+    type RollingDirection = SwipeDirection;
+    type SwipeSpeed = 'slow' | 'normal' | 'flick' | (string & {});
+    type PathConsumeInput = 'auto' | 'eager' | 'never';
 
     type KnownEventName =
         | '*'
-        | 'start'
-        | 'move'
-        | 'end'
-        | 'cancel'
-        | 'fingerchange'
-        | 'gesturestart'
-        | 'gestureupdate'
-        | 'gesturetransition'
-        | 'gesturecommit'
-        | 'gestureend'
-        | 'gesturecancel'
-        | 'ignored'
+        | 'session:start'
+        | 'session:move'
+        | 'session:end'
+        | 'session:cancel'
+        | 'fingers:change'
+        | 'gesture:start'
+        | 'gesture:update'
+        | 'gesture:transition'
+        | 'gesture:commit'
+        | 'gesture:end'
+        | 'gesture:cancel'
+        | 'input:ignored'
         | 'tap'
-        | 'singletap'
-        | 'doubletap'
-        | 'tripletap'
-        | 'tapsequence'
-        | 'multitap'
+        | 'tap:1x'
+        | 'tap:2x'
+        | 'tap:3x'
+        | 'tap:sequence'
+        | 'tap:multi'
+        | `tap:${number}x`
         | 'press'
-        | 'pressstart'
-        | 'pressmove'
-        | 'pressend'
-        | 'presscancel'
-        | 'panstart'
+        | 'press:start'
+        | 'press:move'
+        | 'press:end'
+        | 'press:cancel'
+        | 'pan:start'
         | 'pan'
-        | 'panend'
+        | 'pan:end'
         | 'swipe'
-        | 'swipeintent'
-        | 'swipeleft'
-        | 'swiperight'
-        | 'swipeup'
-        | 'swipedown'
+        | 'swipe:intent'
         | 'swipe:left'
         | 'swipe:right'
         | 'swipe:up'
         | 'swipe:down'
-        | 'flick'
-        | 'pinchstart'
+        | `swipe:${SwipeDirection}`
+        | `swipe:intent:${SwipeDirection}`
+        | 'swipe:mod'
+        | `swipe:mod:${SwipeDirection}`
+        | 'pinch:start'
         | 'pinch'
-        | 'pinchend'
-        | 'pinchin'
-        | 'pinchout'
+        | 'pinch:end'
         | 'pinch:in'
         | 'pinch:out'
-        | 'rotatestart'
+        | `pinch:${PinchDirection}`
+        | 'pinch:mod'
+        | 'pinch:mod:start'
+        | 'pinch:mod:end'
+        | `pinch:mod:${PinchDirection}`
+        | 'rotate:start'
         | 'rotate'
-        | 'rotateend'
-        | 'rotateclockwise'
-        | 'rotatecounterclockwise'
-        | 'rotate:clockwise'
-        | 'rotate:counterclockwise'
-        | 'pathstart'
+        | 'rotate:end'
+        | 'rotate:cw'
+        | 'rotate:ccw'
+        | `rotate:${RotateDirection}`
+        | 'rotate:mod'
+        | 'rotate:mod:start'
+        | 'rotate:mod:end'
+        | `rotate:mod:${RotateDirection}`
+        | 'path:start'
         | 'path'
-        | 'pathend'
-        | 'rollingtap'
-        | 'rollingtapleft'
-        | 'rollingtapright'
-        | 'rollingtapup'
-        | 'rollingtapdown'
-        | 'rollingtap:left'
-        | 'rollingtap:right'
-        | 'rollingtap:up'
-        | 'rollingtap:down'
-        | 'roll'
-        | 'roll:left'
-        | 'roll:right'
-        | 'roll:up'
-        | 'roll:down'
-        | 'modifiertap'
-        | 'modifierpanstart'
-        | 'modifierpan'
-        | 'modifierpanend'
-        | 'pressurechange'
+        | 'path:end'
+        | CircleEventName
+        | ArcEventName
+        | 'rolling'
+        | 'rolling:left'
+        | 'rolling:right'
+        | 'rolling:up'
+        | 'rolling:down'
+        | `rolling:${RollingDirection}`
+        | 'tap:mod'
+        | 'pan:mod:start'
+        | 'pan:mod'
+        | 'pan:mod:end'
+        | 'pressure:change'
         | 'wheel'
-        | 'wheelzoom';
+        | 'wheel:zoom';
 
     interface ConstructorOptions extends Options {
         target: EventTarget;
@@ -143,7 +167,6 @@ declare namespace HandTrick {
         capture?: boolean;
         windowEvents?: boolean;
         ignore?: string | ((target: EventTarget | null, originalEvent: Event, instance: HandTrick) => boolean);
-        callbacks?: Record<string, Handler | Handler[]>;
         clock?: (() => number) | null;
         rect?: 'session' | 'live' | 'static';
         dom?: Partial<DomOptions>;
@@ -162,7 +185,6 @@ declare namespace HandTrick {
         pressure?: Partial<PressureOptions>;
         wheel?: Partial<WheelOptions>;
         edge?: Partial<EdgeOptions>;
-        [callbackAlias: `on${string}`]: unknown;
     }
 
     interface DomOptions {
@@ -187,7 +209,7 @@ declare namespace HandTrick {
         history: number;
         enabled: boolean;
         prune: boolean;
-        useCallbacks: boolean;
+        useListeners: boolean;
         events: string[] | null;
         fastPath: boolean;
         fastPathMaxCandidates: number;
@@ -255,7 +277,6 @@ declare namespace HandTrick {
 
     interface PinchOptions {
         enabled: boolean;
-        fingers: number;
         distance: number;
         scale: number;
         minTime: number;
@@ -265,7 +286,6 @@ declare namespace HandTrick {
 
     interface RotateOptions {
         enabled: boolean;
-        fingers: number;
         angle: number;
         minTime: number;
         minSamples: number;
@@ -286,9 +306,10 @@ declare namespace HandTrick {
         turnAngle: number;
         maxPause: number;
         maxSegments: number;
+        maxCircleCount: number;
         minTime: number;
         minSamples: number;
-        consume: boolean;
+        consume: PathConsumeInput;
     }
 
     interface RollingOptions {
@@ -360,19 +381,35 @@ declare namespace HandTrick {
     interface Criteria {
         region?: string | string[];
         startRegion?: string | string[];
+        tapStartRegion?: string | string[];
+        grid?: GridCriteria | GridCriteria[] | string | string[];
+        startGrid?: GridCriteria | GridCriteria[] | string | string[];
+        tapStartGrid?: GridCriteria | GridCriteria[] | string | string[];
+        sequenceStartGrid?: GridCriteria | GridCriteria[] | string | string[];
+        sequence?: SequenceStepCriteria[] | {
+            start?: SequenceStepCriteria;
+            end?: SequenceStepCriteria;
+            steps?: SequenceStepCriteria[];
+        };
         area?: string | string[];
         startArea?: string | string[];
+        tapStartArea?: string | string[];
         edge?: string | string[];
         modifierRegion?: string | string[];
         modifierArea?: string | string[];
         modifierSource?: string | string[];
         modifierName?: string | string[];
+        modifierFingers?: number | number[];
+        actionFingers?: number | number[];
+        totalFingers?: number | number[];
         key?: string | string[];
         keys?: string | string[];
         combo?: string | string[];
         modifierKeys?: string | string[];
         direction?: string | string[];
         axis?: string | string[];
+        speed?: SwipeSpeed | SwipeSpeed[];
+        modified?: boolean;
         path?: string | string[];
         pathText?: string | string[];
         fingers?: number | number[];
@@ -382,6 +419,35 @@ declare namespace HandTrick {
         keyboardRole?: string | string[];
         pointerType?: string | string[];
         tapCount?: number | number[];
+    }
+
+    interface GridCriteria {
+        rows?: number;
+        cols?: number;
+        row?: number | number[];
+        col?: number | number[];
+        index?: number | number[];
+        cell?: string | string[];
+    }
+
+    interface SequenceStepCriteria {
+        event?: string | string[];
+        gesture?: string | string[];
+        family?: string | string[];
+        mode?: string | string[];
+        state?: string | string[];
+        direction?: string | string[];
+        fingers?: number | number[];
+        actualFingers?: number | number[];
+        syntheticFingers?: number | number[];
+        fingerSource?: string | string[];
+        keyboardRole?: string | string[];
+        keys?: string | string[];
+        combo?: string | string[];
+        tapCount?: number | number[];
+        region?: string | string[];
+        grid?: GridCriteria | GridCriteria[] | string | string[];
+        area?: string | string[];
     }
 
     interface Detail {
@@ -444,6 +510,8 @@ declare namespace HandTrick {
         acceleration: number;
         direction: string;
         axis: string;
+        speed?: SwipeSpeed;
+        modified?: boolean;
         distance: number;
         startDistance: number;
         previousDistance: number;
@@ -493,7 +561,16 @@ declare namespace HandTrick {
         pathSegments?: PathSegment[];
         /** Bare direction pattern that matched a path listener. */
         pathMatched?: string | null;
+        /** Canonical path, circle, or arc pattern that matched. */
+        matchPattern?: string;
+        /** Physical path segment text consumed by the match. */
+        matchedPathText?: string;
         pathDistance?: number;
+        circle?: CircleDetail;
+        circleDirection?: string;
+        circleCount?: number;
+        arc?: ArcDetail;
+        arcDirection?: string;
         rolling?: RollingDetail;
         rollingCount?: number;
         rollingDirection?: string;
@@ -707,6 +784,12 @@ declare namespace HandTrick {
             gesture: string;
             time: number;
             fingers: number;
+            actualFingers: number;
+            syntheticFingers: number;
+            fingerSource: string;
+            keyboardRole: string;
+            keys: string[];
+            keyCombo: string;
             direction: string;
             tapCount: number;
             center: Position;
@@ -756,6 +839,36 @@ declare namespace HandTrick {
         deltaX: number;
         deltaY: number;
         distance: number;
+    }
+
+    interface CircleDetail {
+        direction: CircleDirection | string;
+        count: number;
+        path: string[];
+        pathText: string;
+        start: number;
+        length: number;
+        startDirection?: string;
+        endDirection?: string;
+        cycles?: Array<{
+            direction: CircleDirection | string;
+            startDirection: string;
+            endDirection: string;
+            path: string[];
+            pathText: string;
+            start: number;
+            length: number;
+        }>;
+    }
+
+    interface ArcDetail {
+        direction: ArcDirection | string;
+        path: string[];
+        pathText: string;
+        start: number;
+        length: number;
+        startDirection?: string;
+        endDirection?: string;
     }
 
     interface IntentState {

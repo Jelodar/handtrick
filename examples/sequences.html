@@ -16,7 +16,7 @@
 </head>
 <body>
 <main id="surface">
-    <div id="readout">Try tap, tap, then swipe. Enable aggregate aliases in code with doubletap&gt;swipe. Hold Alt and tap twice, then Alt-swipe for two-finger doubletap sequence.<b>waiting</b></div>
+    <div id="readout">Try tap, tap, then swipe. While the sequence window is open, the long command wins and direct tap/swipe fallbacks do not also run. Alt makes the same chain two-finger on desktop.<b>waiting</b></div>
 </main>
 <pre id="log">waiting</pre>
 <script src="../handtrick.js"></script>
@@ -26,7 +26,7 @@ const value = document.querySelector('b');
 const log = document.getElementById('log');
 const hand = new HandTrick(surface, {
     intent: {
-        events: ['tap>tap>swipe', 'tap>tap>swiperight', 'doubletap>swiperight', '2fingerdoubletap>swipe'],
+        events: ['tap>tap>swipe', 'tap>tap>swipe:right', 'tap:2x>swipe:right'],
         sequenceWindow: 1000
     },
     tapHold: { enabled: false },
@@ -50,14 +50,11 @@ function write(text, event) {
 hand.on('tap>tap>swipe', event => {
     write('tap tap swipe', event);
 });
-hand.on('tap>tap>swiperight', event => {
-    write('tap tap swiperight', event);
+hand.on('tap>tap>swipe:right', event => {
+    write('tap tap swipe:right', event);
 });
-hand.on('doubletap>swiperight', event => {
-    write('doubletap alias swiperight', event);
-});
-hand.on('2fingerdoubletap>swipe', event => {
-    write('two-finger doubletap sequence source=' + event.fingerSource, event);
+hand.on('tap:2x>swipe:right', event => {
+    write('tap:2x alias swipe:right', event);
 });
 </script>
 </body>

@@ -1,6 +1,6 @@
 {
   "name": "handtrick",
-  "version": "1.0.0",
+  "version": "2.3.2",
   "description": "Standalone intent-aware gesture runtime for pointer, touch, mouse, pen, pressure, and wheel input.",
   "author": {
     "name": "Reza Jelodar",
@@ -20,6 +20,7 @@
     "./handtrick.js": "./handtrick.js",
     "./handtrick.min.js": "./handtrick.min.js",
     "./handtrick.mjs": "./handtrick.mjs",
+    "./handtrick.min.mjs": "./handtrick.min.mjs",
     "./index.d.ts": "./index.d.ts",
     "./package.json": "./package.json"
   },
@@ -30,18 +31,25 @@
     "handtrick.js",
     "handtrick.min.js",
     "handtrick.mjs",
+    "handtrick.min.mjs",
     "index.d.ts",
     "README.md",
+    "CONTRIBUTING.md",
+    "ARCHITECTURE.md",
     "LICENSE",
-    "demo",
+    "src",
+    "scripts",
     "examples",
+    "inspector",
     "test"
   ],
   "scripts": {
-    "minify": "terser handtrick.js -o handtrick.min.js -c toplevel,unsafe -m toplevel --comments '/HandTrick.js/'",
-    "build": "npm run minify",
-    "test": "node test/run.js",
-    "test:min": "TEST_MIN=1 node test/run.js"
+    "build:module": "node scripts/build.js --readable",
+    "minify": "node scripts/build.js --minify js",
+    "minify:module": "node scripts/build.js --minify mjs",
+    "build": "node scripts/build.js",
+    "test": "node --test --test-reporter=dot test/*.test.js",
+    "test:min": "TEST_MIN=1 node --test --test-reporter=dot test/*.test.js"
   },
   "keywords": [
     "gesture",

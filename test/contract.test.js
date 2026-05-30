@@ -85,7 +85,7 @@ run('pan axis can lock horizontal payloads', () => {
 run('mouse and touch fallback paths honor input gates', () => {
     const mouseCase = createMouse({ mouse: false });
     let mouseStarts = 0;
-    mouseCase.hand.on('start', () => mouseStarts++);
+    mouseCase.hand.on('session:start', () => mouseStarts++);
     mouseCase.hand.mouseDown(mouseEvent(mouseCase.node, 20, 20));
     assert.strictEqual(mouseStarts, 0);
 
@@ -99,7 +99,7 @@ run('mouse and touch fallback paths honor input gates', () => {
         press: { enabled: false }
     });
     let touchStarts = 0;
-    hand.on('start', () => touchStarts++);
+    hand.on('session:start', () => touchStarts++);
     const item = touch(1, 20, 20, { target: node });
     hand.touchStart(touchEvent(node, [item], [item]));
     assert.strictEqual(touchStarts, 0);
@@ -117,7 +117,7 @@ run('configured mouse buttons can start and changing buttons cancels', () => {
     let pans = 0;
 
     hand.on('tap', () => taps++);
-    hand.on('cancel', () => cancels++);
+    hand.on('session:cancel', () => cancels++);
     hand.on('pan', () => pans++);
 
     hand.mouseDown(mouseEvent(node, 20, 20, { button: 0, buttons: 1 }));
@@ -146,7 +146,7 @@ run('tap hold compares client coordinates across scroll changes', () => {
     });
     const holds = [];
 
-    hand.on('panstart', detail => holds.push(detail.tapHold));
+    hand.on('pan:start', detail => holds.push(detail.tapHold));
     hand.mouseDown(mouseEvent(node, 50, 200, { clientX: 50, clientY: 50 }));
     hand.mouseUp(mouseEvent(node, 50, 200, { clientX: 50, clientY: 50, buttons: 0 }));
     t = 120;
@@ -174,8 +174,8 @@ run('rolling tap consumes multi-finger tap by default', () => {
     let rolling = 0;
     let tap = 0;
 
-    hand.on('rollingtapright', () => rolling++);
-    hand.on('2fingertap', () => tap++);
+    hand.on('rolling:right', () => rolling++);
+    hand.on('tap', { fingers: 2 }, () => tap++);
     hand.pointerDown(pointerEvent(node, 1, 100, 100));
     t = 45;
     hand.pointerDown(pointerEvent(node, 2, 132, 100));
@@ -194,17 +194,17 @@ run('wheel emits common payload shape and ignored wheel event', () => {
         windowEvents: false,
         preventDefault: false,
         ignore: targetNode => targetNode && targetNode.blocked,
-        intent: { events: ['wheelzoom'] },
+        intent: { events: ['wheel:zoom'] },
         wheel: { enabled: true, preventDefault: false, normalize: true },
         press: { enabled: false }
     });
     let zoom = null;
     let ignored = null;
 
-    hand.on('wheelzoom', detail => {
+    hand.on('wheel:zoom', detail => {
         zoom = detail;
     });
-    hand.on('ignored', detail => {
+    hand.on('input:ignored', detail => {
         ignored = detail;
     });
     hand.wheel(Object.assign(mouseEvent(node, 200, 150), {
@@ -269,34 +269,25 @@ run('shared style ownership survives multi instance teardown', () => {
     assert.strictEqual(node.style.touchAction, undefined);
 });
 
-run('setOptions replaces option callbacks and rebinds wheel listeners', () => {
+run('setOptions merges runtime options and rebinds wheel listeners', () => {
     const node = target();
-    let first = 0;
-    let second = 0;
     const hand = new HandTrick(node, {
         input: 'mouse',
         windowEvents: false,
         preventDefault: false,
         wheel: { enabled: false },
-        press: { enabled: false },
-        onTap() {
-            first++;
-        }
+        press: { enabled: false }
     });
+    let taps = 0;
 
     assert.ok(!node.listeners.has('wheel') || !node.listeners.get('wheel').size);
-    hand.setOptions({
-        wheel: { enabled: true },
-        onTap() {
-            second++;
-        }
-    });
+    hand.on('tap', () => taps++);
+    hand.setOptions({ wheel: { enabled: true } });
     assert.strictEqual(node.listeners.get('wheel').size, 1);
     hand.mouseDown(mouseEvent(node, 20, 20));
     hand.mouseUp(mouseEvent(node, 20, 20, { buttons: 0 }));
 
-    assert.strictEqual(first, 0);
-    assert.strictEqual(second, 1);
+    assert.strictEqual(taps, 1);
 });
 
 run('final end reports released topology and native cancel keeps changed pointer', () => {
@@ -315,7 +306,7 @@ run('final end reports released topology and native cancel keeps changed pointer
     let end = null;
     let cancel = null;
 
-    hand.on('end', detail => {
+    hand.on('session:end', detail => {
         end = detail;
     });
     hand.pointerDown(pointerEvent(node, 1, 20, 20));
@@ -324,7 +315,7 @@ run('final end reports released topology and native cancel keeps changed pointer
     assert.strictEqual(end.topology.removed, 1);
     assert.deepStrictEqual(end.activePointers, []);
 
-    hand.on('cancel', detail => {
+    hand.on('session:cancel', detail => {
         cancel = detail;
     });
     hand.pointerDown(pointerEvent(node, 2, 30, 30));
@@ -333,7 +324,7 @@ run('final end reports released topology and native cancel keeps changed pointer
     assert.strictEqual(cancel.fingers, 0);
 });
 
-run('touch changedTouches final batch avoids intermediate fingerchange', () => {
+run('touch changedTouches final batch avoids intermediate fingers:change', () => {
     const node = target();
     const hand = new HandTrick(node, {
         input: 'touch',
@@ -348,19 +339,19 @@ run('touch changedTouches final batch avoids intermediate fingerchange', () => {
     });
     const first = touch(1, 40, 40, { target: node });
     const second = touch(2, 80, 40, { target: node });
-    let fingerchanges = 0;
+    let fingerChanges = 0;
     let taps = 0;
     let end = null;
 
-    hand.on('fingerchange', () => fingerchanges++);
-    hand.on('2fingertap', () => taps++);
-    hand.on('end', detail => {
+    hand.on('fingers:change', () => fingerChanges++);
+    hand.on('tap', { fingers: 2 }, () => taps++);
+    hand.on('session:end', detail => {
         end = detail;
     });
     hand.touchStart(touchEvent(node, [first, second], [first, second]));
     hand.touchEnd(touchEvent(node, [], [first, second]));
 
-    assert.strictEqual(fingerchanges, 1);
+    assert.strictEqual(fingerChanges, 1);
     assert.strictEqual(taps, 1);
     assert.strictEqual(end.topology.removed, 2);
     assert.strictEqual(end.changedPointers.length, 2);
@@ -415,14 +406,15 @@ run('region helpers presets and sequence reset are exposed', () => {
     const { node, hand } = createMouse();
     let matched = 0;
 
-    hand.when('tap', { region: 'top-left' }, () => matched++);
+    hand.on('tap', { region: 'top-left' }, () => matched++);
     hand.mouseDown(mouseEvent(node, 20, 20));
     hand.mouseUp(mouseEvent(node, 20, 20, { buttons: 0 }));
     hand.resetSequences();
 
     assert.strictEqual(matched, 1);
-    assert.ok(HandTrick.events.includes('wheelzoom'));
-    assert.ok(HandTrick.gestures.includes('pinch'));
+    assert.ok(HandTrick.events.includes('wheel:zoom'));
+    assert.ok(HandTrick.recognizers.includes('pinch'));
+    assert.ok(HandTrick.families.includes('arc'));
     assert.strictEqual(HandTrick.zone({ ratioX: 0.9, ratioY: 0.1 }).index, 2);
     assert.strictEqual(HandTrick.presets.media().rotate.enabled, false);
 });

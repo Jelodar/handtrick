@@ -19,7 +19,7 @@
 <main id="surface">
     <section id="panel">
         <h1>KEYBOARD ROLES</h1>
-        <p>Hold Alt for two-finger events. Hold Ctrl for three-finger events. Hold Meta and click in a short line for rolling tap. Hold Shift and drag for modifier pan.</p>
+        <p>Hold Alt for 2F, Ctrl for 3F, Shift+Meta for 4F. Hold Meta and click a short line for rolling. Shift-drag is modifier pan. Keep source on auto until a command must reject real touch or keyboard substitutes.</p>
     </section>
 </main>
 <pre id="log"></pre>
@@ -28,7 +28,7 @@
 const surface = document.getElementById('surface');
 const log = document.getElementById('log');
 const hand = new HandTrick(surface, {
-    intent: { events: ['tap', 'swipe', '2fingertap', '3fingertap', 'rollingtap', 'modifierpan'] },
+    intent: { events: ['tap', 'swipe', 'rolling', 'pan:mod'] },
     pan: { enabled: false }
 });
 
@@ -44,7 +44,13 @@ function write(event) {
     log.textContent = parts.join('  ') + '\n' + log.textContent;
 }
 
-['tap', '2fingertap', '3fingertap', 'rollingtap', 'swipe', 'modifierpan'].forEach(type => hand.on(type, write));
+hand.command('tap', { fingerSource: 'auto' }, write);
+hand.command('tap', { fingers: 2, fingerSource: 'auto' }, write);
+hand.command('tap', { fingers: 3, fingerSource: 'auto' }, write);
+hand.command('tap', { fingers: 4, fingerSource: 'auto' }, write);
+hand.command('rolling', { fingerSource: 'auto' }, write);
+hand.command('swipe', { fingerSource: 'auto' }, write);
+hand.command('pan:mod', { fingerSource: 'auto' }, write);
 </script>
 </body>
 </html>

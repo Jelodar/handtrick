@@ -1,6 +1,6 @@
 const { assert, create, pointerEvent, run } = require('./helpers');
 
-run('registered callbacks prune unobserved rotate during rotate-shaped input', () => {
+run('registered listeners prune unobserved rotate during rotate-shaped input', () => {
     let t = 0;
     const { node, hand } = create({
         clock: () => t,
@@ -23,8 +23,22 @@ run('registered callbacks prune unobserved rotate during rotate-shaped input', (
     hand.pointerUp(pointerEvent(node, 1, 135, 65, { buttons: 0 }));
     hand.pointerUp(pointerEvent(node, 2, 180, 130, { buttons: 0 }));
 
-    assert.ok(!types.includes('rotatestart'));
+    assert.ok(!types.includes('rotate:start'));
     assert.ok(!types.includes('rotate'));
+});
+
+run('useListeners false disables listener-derived pruning', () => {
+    const { hand } = create({
+        intent: { useListeners: false },
+        pan: { enabled: false },
+        pinch: { enabled: false }
+    });
+
+    hand.on('swipe', () => {});
+
+    const state = hand.getIntentState();
+    assert.strictEqual(state.pruned, false);
+    assert.deepStrictEqual(state.groups, []);
 });
 
 run('explicit intent whitelist emits swipe through fast path before normal min time', () => {
@@ -85,9 +99,9 @@ run('explicit empty intent whitelist suppresses semantic gesture commits', () =>
     hand.pointerMove(pointerEvent(node, 1, 120, 40));
     hand.pointerUp(pointerEvent(node, 1, 120, 40, { buttons: 0 }));
 
-    assert.ok(!types.includes('panstart'));
+    assert.ok(!types.includes('pan:start'));
     assert.ok(!types.includes('pan'));
     assert.ok(!types.includes('swipe'));
-    assert.ok(types.includes('move'));
-    assert.ok(types.includes('end'));
+    assert.ok(types.includes('session:move'));
+    assert.ok(types.includes('session:end'));
 });

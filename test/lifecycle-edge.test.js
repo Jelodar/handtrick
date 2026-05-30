@@ -43,20 +43,20 @@ run('disable during active session emits cancel', () => {
     });
     const seen = [];
 
-    hand.on('panstart', () => seen.push('panstart'));
+    hand.on('pan:start', () => seen.push('pan:start'));
     hand.on('pan', () => seen.push('pan'));
-    hand.on('cancel', () => seen.push('cancel'));
+    hand.on('session:cancel', () => seen.push('cancel'));
 
     hand.mouseDown(mouseEvent(node, 20, 20));
     t = 40;
     hand.mouseMove(mouseEvent(node, 60, 20));
     hand.disable();
 
-    assert.ok(seen.includes('panstart'));
+    assert.ok(seen.includes('pan:start'));
     assert.ok(seen.includes('cancel'));
 });
 
-run('cancel during pan emits panend', () => {
+run('cancel during pan emits pan:end', () => {
     let t = 0;
     const { node, hand } = createMouse({
         clock: () => t,
@@ -64,17 +64,17 @@ run('cancel during pan emits panend', () => {
     });
     const seen = [];
 
-    hand.on('panstart', () => seen.push('panstart'));
-    hand.on('panend', () => seen.push('panend'));
-    hand.on('cancel', () => seen.push('cancel'));
+    hand.on('pan:start', () => seen.push('pan:start'));
+    hand.on('pan:end', () => seen.push('pan:end'));
+    hand.on('session:cancel', () => seen.push('cancel'));
 
     hand.mouseDown(mouseEvent(node, 20, 20));
     t = 40;
     hand.mouseMove(mouseEvent(node, 60, 20));
     hand.cancel('test');
 
-    assert.ok(seen.includes('panstart'));
-    assert.ok(seen.includes('panend'));
+    assert.ok(seen.includes('pan:start'));
+    assert.ok(seen.includes('pan:end'));
     assert.ok(seen.includes('cancel'));
 });
 
@@ -135,7 +135,7 @@ run('resetTaps clears tap chain memory', () => {
     const { node, hand } = createMouse({ clock: () => t });
     let doubles = 0;
 
-    hand.on('doubletap', () => doubles++);
+    hand.on('tap:2x', () => doubles++);
 
     hand.mouseDown(mouseEvent(node, 50, 50));
     hand.mouseUp(mouseEvent(node, 50, 50, { buttons: 0 }));

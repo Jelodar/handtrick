@@ -21,9 +21,9 @@ run('keyboard roles substitute two and three finger taps', () => {
     const seen = [];
     let modifier = 0;
 
-    hand.on('2fingertap', detail => seen.push(['2', detail.fingers, detail.actualFingers, detail.syntheticFingers, detail.fingerSource, detail.keyboardSubstitute.role]));
-    hand.on('3fingertap', detail => seen.push(['3', detail.fingers, detail.actualFingers, detail.syntheticFingers, detail.fingerSource, detail.keyboardSubstitute.role]));
-    hand.on('modifiertap', () => modifier++);
+    hand.on('tap', { fingers: 2 }, detail => seen.push(['2', detail.fingers, detail.actualFingers, detail.syntheticFingers, detail.fingerSource, detail.keyboardSubstitute.role]));
+    hand.on('tap', { fingers: 3 }, detail => seen.push(['3', detail.fingers, detail.actualFingers, detail.syntheticFingers, detail.fingerSource, detail.keyboardSubstitute.role]));
+    hand.on('tap:mod', () => modifier++);
 
     hand.mouseDown(mouseEvent(node, 60, 60, { altKey: true }));
     hand.mouseUp(mouseEvent(node, 60, 60, { buttons: 0, altKey: true }));
@@ -38,11 +38,48 @@ run('keyboard roles substitute two and three finger taps', () => {
     assert.strictEqual(modifier, 0);
 });
 
+run('default keyboard roles include four finger substitute', () => {
+    const { node, hand } = createMouse();
+    let detail = null;
+
+    hand.on('tap', { fingers: 4 }, event => {
+        detail = event;
+    });
+
+    hand.mouseDown(mouseEvent(node, 60, 60, { shiftKey: true, metaKey: true }));
+    hand.mouseUp(mouseEvent(node, 60, 60, { buttons: 0, shiftKey: true, metaKey: true }));
+
+    assert.ok(detail);
+    assert.strictEqual(detail.fingers, 4);
+    assert.strictEqual(detail.actualFingers, 1);
+    assert.strictEqual(detail.syntheticFingers, 4);
+    assert.strictEqual(detail.fingerSource, 'keyboard');
+    assert.strictEqual(detail.keyboardSubstitute.role, 'fourFingers');
+});
+
+run('fingerSource auto criteria accepts pointer and keyboard sources', () => {
+    let t = 0;
+    const { node, hand } = createMouse({ clock: () => t });
+    const seen = [];
+
+    hand.on('tap', { fingerSource: 'auto' }, event => {
+        seen.push(event.fingerSource + ':' + event.fingers);
+    });
+
+    hand.mouseDown(mouseEvent(node, 40, 40));
+    hand.mouseUp(mouseEvent(node, 40, 40, { buttons: 0 }));
+    t = 500;
+    hand.mouseDown(mouseEvent(node, 70, 70, { altKey: true }));
+    hand.mouseUp(mouseEvent(node, 70, 70, { buttons: 0, altKey: true }));
+
+    assert.deepStrictEqual(seen, ['pointer:1', 'keyboard:2']);
+});
+
 run('keyboard role swipe uses substituted finger count and criteria', () => {
     let t = 0;
     const { node, hand } = createMouse({
         clock: () => t,
-        intent: { events: ['swipe', '2fingertap>swipe'] },
+        intent: { events: ['swipe', 'tap>swipe'] },
         swipe: {
             distanceByFingers: { 2: 60 },
             minTime: 0,
@@ -54,10 +91,10 @@ run('keyboard role swipe uses substituted finger count and criteria', () => {
     const swipes = [];
     let sequence = 0;
 
-    hand.when('swipe', { fingers: 2, actualFingers: 1, fingerSource: 'keyboard', keyboardRole: 'twoFingers' }, detail => {
+    hand.on('swipe', { fingers: 2, actualFingers: 1, fingerSource: 'keyboard', keyboardRole: 'twoFingers' }, detail => {
         swipes.push(detail.direction + ':' + detail.fingers + ':' + detail.syntheticFingers);
     });
-    hand.on('2fingertap>swipe', () => {
+    hand.on('tap>swipe', () => {
         sequence++;
     });
 
@@ -92,13 +129,13 @@ run('keyboard roles can be customized and disabled per combo', () => {
     let three = null;
     let two = 0;
 
-    hand.on('modifiertap', detail => {
+    hand.on('tap:mod', detail => {
         modifier = detail.modifier;
     });
-    hand.on('3fingertap', detail => {
+    hand.on('tap', { fingers: 3 }, detail => {
         three = detail;
     });
-    hand.on('2fingertap', () => {
+    hand.on('tap', { fingers: 2 }, () => {
         two++;
     });
 

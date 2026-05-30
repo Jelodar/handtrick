@@ -1,0 +1,1 @@
+/** HandTrick.js - MIT © Jelodar */

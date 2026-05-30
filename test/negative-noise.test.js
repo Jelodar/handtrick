@@ -19,7 +19,7 @@ run('parallel two-finger swipe does not rotate when rotate is registered', () =>
     let swipes = 0;
 
     hand.on('rotate', () => rotates++);
-    hand.on('swipeup', () => swipes++);
+    hand.on('swipe:up', () => swipes++);
 
     hand.pointerDown(pointerEvent(node, 1, 100, 120));
     hand.pointerDown(pointerEvent(node, 2, 200, 120));
@@ -43,7 +43,7 @@ run('modifier pan blocks pinch noise from anchor plus action finger', () => {
     const { node, hand } = create({
         clock: () => t,
         intent: {
-            events: ['modifierpan', 'pinch']
+            events: ['pan:mod', 'pinch']
         },
         pan: { enabled: false },
         rotate: { enabled: false },
@@ -62,7 +62,7 @@ run('modifier pan blocks pinch noise from anchor plus action finger', () => {
     const pans = [];
     let pinches = 0;
 
-    hand.on('modifierpan', detail => pans.push(detail.actionDeltaX));
+    hand.on('pan:mod', detail => pans.push(detail.actionDeltaX));
     hand.on('pinch', () => pinches++);
 
     hand.pointerDown(pointerEvent(node, 1, 80, 80));
@@ -84,7 +84,7 @@ run('near-simultaneous second finger remains two-finger tap instead of rolling o
     const { node, hand } = create({
         clock: () => t,
         intent: {
-            events: ['modifiertap', 'rollingtap', '2fingertap']
+            events: ['tap:mod', 'rolling', 'tap']
         },
         pan: { enabled: false },
         swipe: { enabled: false },
@@ -98,9 +98,9 @@ run('near-simultaneous second finger remains two-finger tap instead of rolling o
     let rolling = 0;
     let tap = 0;
 
-    hand.on('modifiertap', () => modifier++);
-    hand.on('rollingtap', () => rolling++);
-    hand.on('2fingertap', () => tap++);
+    hand.on('tap:mod', () => modifier++);
+    hand.on('rolling', () => rolling++);
+    hand.on('tap', { fingers: 2 }, () => tap++);
 
     hand.pointerDown(pointerEvent(node, 1, 80, 80));
     t = 8;
@@ -120,7 +120,7 @@ run('staggered nearby two-finger contact is too short for rolling tap', () => {
     const { node, hand } = create({
         clock: () => t,
         intent: {
-            events: ['rollingtap', '2fingertap']
+            events: ['rolling', 'tap']
         },
         pan: { enabled: false },
         swipe: { enabled: false },
@@ -130,8 +130,8 @@ run('staggered nearby two-finger contact is too short for rolling tap', () => {
     let rolling = 0;
     let tap = 0;
 
-    hand.on('rollingtap', () => rolling++);
-    hand.on('2fingertap', () => tap++);
+    hand.on('rolling', () => rolling++);
+    hand.on('tap', { fingers: 2 }, () => tap++);
 
     hand.pointerDown(pointerEvent(node, 1, 100, 100));
     t = 70;

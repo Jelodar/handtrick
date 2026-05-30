@@ -12,7 +12,12 @@
     const atan2 = Math.atan2;
     const PI = Math.PI;
     const styleMemory = new WeakMap();
-    const pathDirectionSet = { left: true, right: true, up: true, down: true };
+    const cardinalDirections = ['left', 'right', 'up', 'down'];
+    const pathDirectionSet = listSet(cardinalDirections);
+    const selectorDirectionSet = listSet(cardinalDirections.concat(['in', 'out', 'cw', 'ccw']));
+    const swipeDirections = cardinalDirections;
+    const circleDirections = ['cw', 'ccw'];
+    const pathConsumeModes = { auto: true, eager: true, never: true };
     const defaultKeyboardCombos = {
         plain: KEY_SHIFT,
         shiftAlt: KEY_SHIFT + '+' + KEY_ALT,
@@ -23,7 +28,7 @@
         modifier: KEY_SHIFT,
         twoFingers: KEY_ALT,
         threeFingers: KEY_CTRL,
-        fourFingers: null,
+        fourFingers: KEY_SHIFT + '+' + KEY_META,
         rollingTap: KEY_META
     };
     const rollingDefaultSeed = {
@@ -37,53 +42,126 @@
         maxGap: { 3: 1.31, 4: 1.31 }
     };
 
+    function listSet(values) {
+        return values.reduce((out, value) => {
+            out[value] = true;
+            return out;
+        }, {});
+    }
+
+    function normalizePathConsumeMode(value) {
+        const mode = typeof value === 'string' ? value.toLowerCase() : '';
+        return pathConsumeModes[mode] ? mode : 'auto';
+    }
+
+    function swipeRegistryEvents() {
+        const out = ['swipe', 'swipe:intent', 'swipe:mod'];
+        swipeDirections.forEach(direction => out.push('swipe:intent:' + direction));
+        swipeDirections.forEach(direction => out.push('swipe:' + direction));
+        swipeDirections.forEach(direction => out.push('swipe:mod:' + direction));
+        return out;
+    }
+
+    function rollingRegistryEvents() {
+        const out = ['rolling'];
+        swipeDirections.forEach(direction => out.push('rolling:' + direction));
+        return out;
+    }
+
+    function transformRegistryEvents(family, directions) {
+        const out = [family, family + ':start', family + ':end', family + ':mod', family + ':mod:start', family + ':mod:end'];
+        directions.forEach(direction => out.push(family + ':' + direction));
+        directions.forEach(direction => out.push(family + ':mod:' + direction));
+        return out;
+    }
+
+    function circleRegistryEvents() {
+        const out = ['circle'];
+        circleDirections.forEach(direction => out.push('circle:' + direction));
+        return out;
+    }
+
+    function arcRegistryEvents() {
+        const out = ['arc'];
+        cardinalDirections.forEach(direction => out.push('arc:' + direction));
+        return out;
+    }
+
     const eventRegistry = {
-        lifecycle: ['start', 'move', 'end', 'cancel', 'fingerchange', 'gesturestart', 'gestureupdate', 'gesturetransition', 'gesturecommit', 'gestureend', 'gesturecancel', 'ignored'],
-        tap: ['tap', 'singletap', 'doubletap', 'tripletap', 'tapsequence', 'multitap'],
-        press: ['press', 'pressstart', 'pressmove', 'pressend', 'presscancel'],
-        pan: ['panstart', 'pan', 'panend'],
-        swipe: ['swipe', 'swipeintent', 'swipeleft', 'swiperight', 'swipeup', 'swipedown', 'flick'],
-        pinch: ['pinchstart', 'pinch', 'pinchend', 'pinchin', 'pinchout'],
-        rotate: ['rotatestart', 'rotate', 'rotateend', 'rotateclockwise', 'rotatecounterclockwise'],
-        path: ['pathstart', 'path', 'pathend'],
-        rolling: ['rollingtap', 'rollingtapleft', 'rollingtapright', 'rollingtapup', 'rollingtapdown'],
-        modifier: ['modifiertap', 'modifierpanstart', 'modifierpan', 'modifierpanend'],
-        pressure: ['pressurechange'],
-        wheel: ['wheel', 'wheelzoom']
+        lifecycle: ['session:start', 'session:move', 'session:end', 'session:cancel', 'fingers:change', 'gesture:start', 'gesture:update', 'gesture:transition', 'gesture:commit', 'gesture:end', 'gesture:cancel', 'input:ignored'],
+        tap: ['tap', 'tap:1x', 'tap:2x', 'tap:3x', 'tap:sequence', 'tap:multi'],
+        press: ['press', 'press:start', 'press:move', 'press:end', 'press:cancel'],
+        pan: ['pan:start', 'pan', 'pan:end'],
+        swipe: swipeRegistryEvents(),
+        pinch: transformRegistryEvents('pinch', ['in', 'out']),
+        rotate: transformRegistryEvents('rotate', ['cw', 'ccw']),
+        path: ['path:start', 'path', 'path:end'],
+        circle: circleRegistryEvents(),
+        arc: arcRegistryEvents(),
+        rolling: rollingRegistryEvents(),
+        modifier: ['tap:mod', 'pan:mod:start', 'pan:mod', 'pan:mod:end'],
+        pressure: ['pressure:change'],
+        wheel: ['wheel', 'wheel:zoom']
     };
 
     const eventNames = Object.keys(eventRegistry).reduce((out, group) => out.concat(eventRegistry[group]), []);
-    const activatableGestures = {
-        tap: true,
-        press: true,
+    const recognizerNames = ['tap', 'press', 'pan', 'swipe', 'pinch', 'rotate', 'path', 'rolling', 'modifier', 'pressure', 'wheel'];
+    const activatableRecognizers = listSet(recognizerNames);
+    const additiveEventTypes = {
+        'session:start': true,
+        'session:move': true,
+        'session:end': true,
+        'session:cancel': true,
+        'fingers:change': true,
+        'gesture:start': true,
+        'gesture:update': true,
+        'gesture:transition': true,
+        'gesture:commit': true,
+        'gesture:end': true,
+        'gesture:cancel': true,
+        'input:ignored': true,
+        'tap:sequence': true,
+        'press:start': true,
+        'swipe:intent': true,
+        'swipe:intent:left': true,
+        'swipe:intent:right': true,
+        'swipe:intent:up': true,
+        'swipe:intent:down': true,
+        'press:move': true,
+        'press:end': true,
+        'press:cancel': true,
+        'pan:start': true,
         pan: true,
-        swipe: true,
+        'pan:end': true,
+        'pinch:start': true,
         pinch: true,
+        'pinch:end': true,
+        'pinch:in': true,
+        'pinch:out': true,
+        'pinch:mod:start': true,
+        'pinch:mod': true,
+        'pinch:mod:end': true,
+        'pinch:mod:in': true,
+        'pinch:mod:out': true,
+        'rotate:start': true,
         rotate: true,
+        'rotate:end': true,
+        'rotate:cw': true,
+        'rotate:ccw': true,
+        'rotate:mod:start': true,
+        'rotate:mod': true,
+        'rotate:mod:end': true,
+        'rotate:mod:cw': true,
+        'rotate:mod:ccw': true,
+        'path:start': true,
         path: true,
-        rolling: true,
-        modifier: true,
-        pressure: true,
-        wheel: true
-    };
-    const specificEventAliases = {
-        'swipe:left': 'swipeleft',
-        'swipe:right': 'swiperight',
-        'swipe:up': 'swipeup',
-        'swipe:down': 'swipedown',
-        'rollingtap:left': 'rollingtapleft',
-        'rollingtap:right': 'rollingtapright',
-        'rollingtap:up': 'rollingtapup',
-        'rollingtap:down': 'rollingtapdown',
-        'pinch:in': 'pinchin',
-        'pinch:out': 'pinchout',
-        'rotate:clockwise': 'rotateclockwise',
-        'rotate:counterclockwise': 'rotatecounterclockwise',
-        roll: 'rollingtap',
-        'roll:left': 'rollingtapleft',
-        'roll:right': 'rollingtapright',
-        'roll:up': 'rollingtapup',
-        'roll:down': 'rollingtapdown'
+        'path:end': true,
+        'pan:mod:start': true,
+        'pan:mod': true,
+        'pan:mod:end': true,
+        'pressure:change': true,
+        wheel: true,
+        'wheel:zoom': true
     };
 
     const defaults = {
@@ -99,7 +177,6 @@
         capture: true,
         windowEvents: true,
         ignore: null,
-        callbacks: {},
         clock: null,
         rect: 'session',
         dom: {
@@ -123,7 +200,7 @@
             history: 12,
             enabled: true,
             prune: true,
-            useCallbacks: true,
+            useListeners: true,
             events: null,
             fastPath: true,
             fastPathMaxCandidates: 2,
@@ -184,7 +261,6 @@
         },
         pinch: {
             enabled: true,
-            fingers: 2,
             distance: 10,
             scale: 0.03,
             minTime: 70,
@@ -193,7 +269,6 @@
         },
         rotate: {
             enabled: true,
-            fingers: 2,
             angle: 8,
             minTime: 130,
             minSamples: 3,
@@ -213,9 +288,10 @@
             turnAngle: 55,
             maxPause: 650,
             maxSegments: 6,
+            maxCircleCount: 6,
             minTime: 80,
             minSamples: 2,
-            consume: true
+            consume: 'auto'
         },
         rolling: {
             enabled: true,
@@ -267,62 +343,7 @@
         }
     };
 
-    const eventAliases = {
-        onStart: 'start',
-        onMove: 'move',
-        onEnd: 'end',
-        onCancel: 'cancel',
-        onGestureStart: 'gesturestart',
-        onGestureUpdate: 'gestureupdate',
-        onGestureTransition: 'gesturetransition',
-        onGestureCommit: 'gesturecommit',
-        onGestureEnd: 'gestureend',
-        onGestureCancel: 'gesturecancel',
-        onTap: 'tap',
-        onDoubleTap: 'doubletap',
-        onTripleTap: 'tripletap',
-        onTapSequence: 'tapsequence',
-        onMultiTap: 'multitap',
-        onPress: 'press',
-        onPressStart: 'pressstart',
-        onPressMove: 'pressmove',
-        onPressEnd: 'pressend',
-        onPressCancel: 'presscancel',
-        onPanStart: 'panstart',
-        onPan: 'pan',
-        onPanEnd: 'panend',
-        onSwipe: 'swipe',
-        onSwipeIntent: 'swipeintent',
-        onPinchStart: 'pinchstart',
-        onPinch: 'pinch',
-        onPinchEnd: 'pinchend',
-        onRotateStart: 'rotatestart',
-        onRotate: 'rotate',
-        onRotateEnd: 'rotateend',
-        onPathStart: 'pathstart',
-        onPath: 'path',
-        onPathEnd: 'pathend',
-        onRollingTap: 'rollingtap',
-        onModifierTap: 'modifiertap',
-        onModifierPanStart: 'modifierpanstart',
-        onModifierPan: 'modifierpan',
-        onModifierPanEnd: 'modifierpanend',
-        onPressureChange: 'pressurechange',
-        onWheel: 'wheel',
-        onWheelZoom: 'wheelzoom',
-        onFingerChange: 'fingerchange',
-        onIgnored: 'ignored'
-    };
-
-    const gestureEvents = Object.keys(eventRegistry).reduce((out, group) => {
-        if (group === 'lifecycle' || group === 'pressure') return out;
-        eventRegistry[group].forEach(type => {
-            out[type] = group;
-        });
-        return out;
-    }, {});
-
-    const continuousGestures = ['pan', 'swipe', 'pinch', 'rotate'];
+    const motionCandidateRecognizers = ['pan', 'swipe', 'pinch', 'rotate'];
 
     function isPlainObject(value) {
         return value && Object.prototype.toString.call(value) === '[object Object]';
@@ -396,6 +417,14 @@
         return abs(normalizeAngle(directionAngle(b) - directionAngle(a)));
     }
 
+    function oppositeDirection(direction) {
+        if (direction === 'right') return 'left';
+        if (direction === 'left') return 'right';
+        if (direction === 'up') return 'down';
+        if (direction === 'down') return 'up';
+        return '';
+    }
+
     function toArray(value) {
         return Array.isArray(value) ? value : [value];
     }
@@ -408,115 +437,338 @@
         return out;
     }
 
-    function isPathDirection(value) {
+    function isCardinalDirection(value) {
         return !!pathDirectionSet[String(value || '').toLowerCase()];
     }
 
-    function normalizeEventType(type) {
-        const key = String(type || '').toLowerCase();
-        return specificEventAliases[key] || type;
-    }
-
-    function isPathPatternEvent(type) {
-        const tokens = pathTokens(type);
-        return tokens.length > 0;
-    }
-
-    function pathPatternFromEvent(type) {
-        return isPathPatternEvent(type) ? pathText(type) : '';
-    }
-
-    function isSequencePatternEvent(type) {
-        const value = String(type || '');
-        if (isPathPatternEvent(value)) return false;
-        return value.indexOf('>') >= 0;
-    }
-
-    function gestureForEvent(type) {
-        const value = String(normalizeEventType(type) || '').toLowerCase();
-        if (isPathPatternEvent(value)) return 'path';
-        if (gestureEvents[value]) return gestureEvents[value];
-        if (/^\d+finger(tap|doubletap|tripletap|\d+tap)$/.test(value)) return 'tap';
-        if (/^\d+fingerrollingtap$/.test(value)) return 'rolling';
-        return null;
+    function isPathDirection(value) {
+        return isCardinalDirection(value);
     }
 
     function sequenceTokens(type) {
-        const value = String(type || '');
+        const value = String(type || '').toLowerCase().trim();
         return value.split('>').map(item => item.trim()).filter(Boolean);
     }
 
-    function tapSequenceMatchers(raw, count, fingers) {
-        const out = [];
-        for (let i = 1; i <= count; i++) {
-            out.push({
-                raw,
-                token: 'tap',
-                tapCount: i === count ? count : null,
-                fingers: fingers || null
-            });
-        }
+    function selectorResult(raw, data) {
+        const out = Object.assign({
+            raw,
+            canonical: raw,
+            valid: false,
+            opaque: true,
+            family: null,
+            recognizer: null,
+            mode: null,
+            state: null,
+            direction: null,
+            fingers: null,
+            count: null,
+            pathPattern: null
+        }, data || {});
+        out.recognizer = out.valid ? selectorRecognizer(out) : null;
         return out;
     }
 
-    function namedTapCount(value) {
-        if (value === 'single') return 1;
-        if (value === 'double') return 2;
-        if (value === 'triple') return 3;
-        return null;
+    function invalidSelector(raw) {
+        return selectorResult(raw, null);
     }
 
-    function sequenceTapAlias(value) {
-        let match = value.match(/^(single|double|triple)tap$/);
-        if (match) return { count: namedTapCount(match[1]), fingers: null };
-        match = value.match(/^(\d+)finger(?:(single|double|triple)tap|(\d+)tap)$/);
-        if (!match) return null;
-        return {
-            count: match[3] ? parseInt(match[3], 10) : namedTapCount(match[2]),
-            fingers: parseInt(match[1], 10)
-        };
+    function selectorRecognizer(parsed) {
+        if (!parsed || !parsed.valid) return null;
+        if (parsed.family === 'session' || parsed.family === 'input' || parsed.family === 'gesture' || parsed.family === 'fingers') return null;
+        if (parsed.family === 'tap' && parsed.mode === 'mod') return 'modifier';
+        if (parsed.family === 'pan' && parsed.mode === 'mod') return 'modifier';
+        if (parsed.family === 'circle') return 'path';
+        if (parsed.family === 'arc') return 'path';
+        if (parsed.family === 'path') return 'path';
+        return activatableRecognizers[parsed.family] ? parsed.family : null;
     }
 
-    function sequenceMatcher(raw) {
-        const value = String(normalizeEventType(raw) || '').toLowerCase();
-        const tapAlias = sequenceTapAlias(value);
-        if (tapAlias && tapAlias.count) return tapSequenceMatchers(value, tapAlias.count, tapAlias.fingers);
-        let match;
-        const matcher = {
-            raw: value,
-            token: gestureForEvent(value) || value,
-            tapCount: null,
-            fingers: null,
+    function eventRecognizerGroup(parsedOrType) {
+        const parsed = typeof parsedOrType === 'string' ? parseEventSelector(canonicalEventType(parsedOrType)) : parsedOrType;
+        return selectorRecognizer(parsed);
+    }
+
+    function parseEventSelector(value) {
+        const raw = String(value === undefined || value === null ? '' : value).toLowerCase().trim();
+        if (!raw || raw === '*') return invalidSelector(raw);
+
+        const pathPattern = pathPatternFromEvent(raw);
+        if (pathPattern) {
+            return selectorResult(raw, {
+                canonical: pathPattern,
+                valid: true,
+                opaque: false,
+                family: 'path',
+                pathPattern
+            });
+        }
+
+        if (raw.indexOf('>') >= 0) return invalidSelector(raw);
+
+        const parts = raw.split(':').map(item => item.trim());
+        const family = parts.shift();
+        if (!family || !selectorFamilyAllowed(family) || parts.some(item => !item)) return invalidSelector(raw);
+
+        const parsed = {
+            raw,
+            family,
+            mode: null,
+            state: null,
             direction: null,
-            multitap: false
+            fingers: null,
+            count: null
         };
-        if (value === 'multitap') {
-            matcher.token = 'tap';
-            matcher.multitap = true;
+        const seen = {};
+
+        for (let index = 0; index < parts.length; index++) {
+            const token = parts[index];
+            let match = token.match(/^([1-9]\d*)f$/);
+            if (match) {
+                if (seen.fingers) return invalidSelector(raw);
+                seen.fingers = true;
+                parsed.fingers = parseInt(match[1], 10);
+                continue;
+            }
+            match = token.match(/^([1-9]\d*)x$/);
+            if (match) {
+                if (seen.count) return invalidSelector(raw);
+                seen.count = true;
+                parsed.count = parseInt(match[1], 10);
+                continue;
+            }
+            if (selectorModeAllowed(token)) {
+                if (seen.mode) return invalidSelector(raw);
+                seen.mode = true;
+                parsed.mode = token;
+                continue;
+            }
+            if (selectorStateAllowed(token)) {
+                if (seen.state) return invalidSelector(raw);
+                seen.state = true;
+                parsed.state = token;
+                continue;
+            }
+            if (selectorDirectionAllowed(token)) {
+                if (seen.direction) return invalidSelector(raw);
+                seen.direction = true;
+                parsed.direction = token;
+                continue;
+            }
+            return invalidSelector(raw);
         }
-        if (value.indexOf('swipe') === 0 && value.length > 5) {
-            matcher.token = 'swipe';
-            matcher.direction = value.slice(5);
+
+        if (!selectorShapeAllowed(parsed)) return invalidSelector(raw);
+
+        const canonical = [family];
+        if (parsed.mode) canonical.push(parsed.mode);
+        if (parsed.fingers !== null) canonical.push(parsed.fingers + 'f');
+        if (parsed.count !== null && !(family === 'circle' && parsed.count === 1)) canonical.push(parsed.count + 'x');
+        if (parsed.direction) canonical.push(parsed.direction);
+        if (parsed.state) canonical.push(parsed.state);
+        return selectorResult(raw, Object.assign({}, parsed, {
+            canonical: canonical.join(':'),
+            valid: true,
+            opaque: false
+        }));
+    }
+
+    function selectorFamilyAllowed(family) {
+        return !!{
+            session: true,
+            input: true,
+            gesture: true,
+            fingers: true,
+            tap: true,
+            press: true,
+            pan: true,
+            swipe: true,
+            pinch: true,
+            rotate: true,
+            path: true,
+            circle: true,
+            arc: true,
+            rolling: true,
+            pressure: true,
+            wheel: true
+        }[family];
+    }
+
+    function selectorModeAllowed(token) {
+        return !!{
+            mod: true,
+            multi: true,
+            sequence: true,
+            intent: true,
+            zoom: true
+        }[token];
+    }
+
+    function selectorStateAllowed(token) {
+        return !!{
+            start: true,
+            move: true,
+            change: true,
+            update: true,
+            transition: true,
+            commit: true,
+            end: true,
+            cancel: true,
+            ignored: true
+        }[token];
+    }
+
+    function selectorDirectionAllowed(token) {
+        return !!selectorDirectionSet[token];
+    }
+
+    function selectorShapeAllowed(parsed) {
+        const state = parsed.state;
+        const mode = parsed.mode;
+        const direction = parsed.direction;
+        const fingers = parsed.fingers;
+        const count = parsed.count;
+        if (parsed.family === 'session') return !mode && !direction && fingers === null && count === null && ['start', 'move', 'end', 'cancel'].includes(state);
+        if (parsed.family === 'input') return !mode && !direction && fingers === null && count === null && state === 'ignored';
+        if (parsed.family === 'gesture') return !mode && !direction && fingers === null && count === null && ['start', 'update', 'transition', 'commit', 'end', 'cancel'].includes(state);
+        if (parsed.family === 'fingers') return !mode && !direction && fingers === null && count === null && state === 'change';
+        if (parsed.family === 'tap') {
+            if (state || direction) return false;
+            if (fingers !== null) return false;
+            if (mode === 'mod') return count === null;
+            if (mode === 'multi' || mode === 'sequence') return fingers === null && count === null;
+            if (mode) return false;
+            return true;
         }
-        if (value.indexOf('rollingtap') === 0 && value.length > 10) {
-            matcher.token = 'rolling';
-            matcher.direction = value.slice(10);
+        if (parsed.family === 'press') return !mode && !direction && fingers === null && count === null && (!state || ['start', 'move', 'end', 'cancel'].includes(state));
+        if (parsed.family === 'pan') {
+            if (direction || fingers !== null || count !== null) return false;
+            if (mode && mode !== 'mod') return false;
+            return !state || state === 'start' || state === 'end';
         }
-        match = value.match(/^(\d+)fingertap$/);
-        if (match) {
-            matcher.token = 'tap';
-            matcher.fingers = parseInt(match[1], 10);
+        if (parsed.family === 'swipe') {
+            if (state || fingers !== null || count !== null) return false;
+            if (mode && mode !== 'intent' && mode !== 'mod') return false;
+            return !direction || isCardinalDirection(direction);
         }
-        match = value.match(/^(\d+)fingerrollingtap$/);
-        if (match) {
-            matcher.token = 'rolling';
-            matcher.fingers = parseInt(match[1], 10);
+        if (parsed.family === 'pinch') {
+            if (mode && mode !== 'mod') return false;
+            if (fingers !== null || count !== null) return false;
+            if (state) return !direction && (state === 'start' || state === 'end');
+            return !direction || direction === 'in' || direction === 'out';
         }
-        return [matcher];
+        if (parsed.family === 'rotate') {
+            if (mode && mode !== 'mod') return false;
+            if (fingers !== null || count !== null) return false;
+            if (state) return !direction && (state === 'start' || state === 'end');
+            return !direction || direction === 'cw' || direction === 'ccw';
+        }
+        if (parsed.family === 'path') return !mode && !direction && fingers === null && count === null && (!state || state === 'start' || state === 'end');
+        if (parsed.family === 'circle') return !mode && !state && fingers === null && (!direction || direction === 'cw' || direction === 'ccw');
+        if (parsed.family === 'arc') return !mode && !state && fingers === null && count === null && (!direction || isCardinalDirection(direction));
+        if (parsed.family === 'rolling') return !mode && !state && fingers === null && count === null && (!direction || isCardinalDirection(direction));
+        if (parsed.family === 'pressure') return !mode && !direction && fingers === null && count === null && state === 'change';
+        if (parsed.family === 'wheel') return !state && !direction && fingers === null && count === null && (!mode || mode === 'zoom');
+        return false;
+    }
+
+    function parseSequenceSelector(value) {
+        const raw = String(value === undefined || value === null ? '' : value).toLowerCase().trim();
+        if (!raw || raw.indexOf('>') < 0 || pathPatternFromEvent(raw)) return { raw, valid: false, canonical: raw, parsed: [], matchers: [] };
+        const parsed = sequenceTokens(raw).map(parseEventSelector);
+        if (parsed.length < 2 || parsed.some(item => !item.valid || item.pathPattern)) return { raw, valid: false, canonical: raw, parsed, matchers: [] };
+        const canonical = parsed.map(item => item.canonical).join('>');
+        return {
+            raw,
+            valid: true,
+            canonical,
+            parsed,
+            matchers: parsed.reduce((out, item) => out.concat(sequenceMatchersForSelector(item)), [])
+        };
+    }
+
+    function canonicalEventType(type) {
+        const key = String(type === undefined || type === null ? '' : type).toLowerCase().trim();
+        if (key === '*') return '*';
+        if (key.indexOf('>') >= 0 && !pathPatternFromEvent(key)) {
+            const sequence = parseSequenceSelector(key);
+            return sequence.valid ? sequence.canonical : key;
+        }
+        return parseEventSelector(key).canonical;
+    }
+
+    function normalizeEventType(type) {
+        return canonicalEventType(type);
+    }
+
+    function isPathPatternEvent(type) {
+        return !!pathPatternFromEvent(canonicalEventType(type));
+    }
+
+    function pathPatternFromEvent(type) {
+        const value = String(type || '').toLowerCase().trim();
+        if (!value) return '';
+        if (value.indexOf('>') >= 0) return pathPatternText(value);
+        if (value.indexOf(':') < 0 && value !== 'circle') return pathText(value);
+        return '';
+    }
+
+    function isSequencePatternEvent(type) {
+        return parseSequenceSelector(canonicalEventType(type)).valid;
+    }
+
+    function sequenceMatchersForSelector(parsed) {
+        const base = {
+            raw: parsed.canonical,
+            token: parsed.recognizer || parsed.family,
+            family: parsed.family,
+            event: parsed.canonical,
+            mode: parsed.mode,
+            state: parsed.state,
+            tapCount: null,
+            fingers: parsed.fingers,
+            direction: parsed.direction,
+            multiTap: false,
+            specificity: selectorSpecificity(parsed)
+        };
+
+        if (parsed.family === 'tap' && parsed.mode !== 'mod' && parsed.count !== null) {
+            const out = [];
+            for (let index = 1; index <= parsed.count; index++) {
+                out.push(Object.assign({}, base, {
+                    event: index === parsed.count ? parsed.canonical : 'tap',
+                    tapCount: index === parsed.count ? parsed.count : null,
+                    specificity: 100 + (index === parsed.count ? selectorSpecificity(parsed) : 10)
+                }));
+            }
+            return out;
+        }
+
+        if (parsed.family === 'tap' && parsed.mode === 'multi') base.multiTap = true;
+        base.specificity += 100;
+        return [base];
     }
 
     function sequencePattern(tokens) {
-        return tokens.reduce((out, token) => out.concat(sequenceMatcher(token)), []);
+        const sequence = Array.isArray(tokens) ? parseSequenceSelector(tokens.join('>')) : parseSequenceSelector(tokens);
+        return sequence.matchers;
+    }
+
+    function selectorSpecificity(parsed) {
+        if (!parsed || !parsed.valid) return 0;
+        if (parsed.pathPattern) {
+            const pattern = parsePathPattern(parsed.pathPattern);
+            return 800 + (pattern.valid ? pattern.length : 0) * 20;
+        }
+        let score = 0;
+        if (parsed.state) score += 40;
+        if (parsed.mode === 'mod') score += 35;
+        if (parsed.count !== null) score += 30;
+        if (parsed.mode && parsed.mode !== 'mod') score += 20;
+        if (parsed.direction) score += 20;
+        if (parsed.fingers !== null) score += 15;
+        if (!parsed.state && !parsed.mode && !parsed.direction && parsed.fingers === null && parsed.count === null) score += 10;
+        return score || 5;
     }
 
     function clone(value) {
@@ -623,6 +875,13 @@
         return value === expected;
     }
 
+    function matchFingerSource(value, expected) {
+        if (expected === undefined || expected === null) return true;
+        if (Array.isArray(expected)) return expected.some(item => matchFingerSource(value, item));
+        if (expected === 'auto' || expected === 'any') return true;
+        return value === expected;
+    }
+
     function matchCombo(value, expected) {
         if (expected === undefined || expected === null) return true;
         if (Array.isArray(expected)) return expected.some(item => matchCombo(value, item));
@@ -650,14 +909,345 @@
         return pathTokens(value).join('>');
     }
 
-    function pathMatches(value, expected) {
+    function invalidPathPattern(raw) {
+        return {
+            raw,
+            valid: false,
+            atoms: [],
+            length: 0,
+            canonical: ''
+        };
+    }
+
+    function parsePathPattern(value) {
+        const raw = Array.isArray(value) ? value.map(item => String(item || '').toLowerCase().trim()).filter(Boolean).join('>') : String(value || '').toLowerCase().trim();
+        if (!raw) return invalidPathPattern(raw);
+        const parts = raw.split('>').map(item => item.trim()).filter(Boolean);
+        if (!parts.length) return invalidPathPattern(raw);
+        const atoms = [];
+        for (let index = 0; index < parts.length; index++) {
+            const part = parts[index];
+            if (isPathDirection(part)) {
+                atoms.push({
+                    kind: 'direction',
+                    direction: part,
+                    length: 1,
+                    canonical: part
+                });
+                continue;
+            }
+            const circle = parseCirclePathToken(part);
+            if (circle.valid) {
+                atoms.push(circle.atom);
+                continue;
+            }
+            const arc = parseArcPathToken(part);
+            if (!arc.valid) return invalidPathPattern(raw);
+            atoms.push(arc.atom);
+        }
+        const canonical = atoms.map(atom => atom.canonical).join('>');
+        return {
+            raw,
+            valid: true,
+            atoms,
+            length: atoms.reduce((sum, atom) => sum + atom.length, 0),
+            canonical
+        };
+    }
+
+    function pathPatternText(value) {
+        const pattern = parsePathPattern(value);
+        return pattern.valid ? pattern.canonical : '';
+    }
+
+    function isPathPatternTokenArray(value) {
+        return Array.isArray(value) && value.length > 0 && value.every(item => String(item || '').indexOf('>') < 0) && parsePathPattern(value).valid;
+    }
+
+    function parseCirclePathToken(value) {
+        const raw = String(value || '').toLowerCase().trim();
+        const parts = raw.split(':').map(item => item.trim());
+        if (parts.shift() !== 'circle' || parts.some(item => !item)) return { valid: false };
+        const atom = {
+            kind: 'circle',
+            direction: '',
+            count: 1,
+            length: 4,
+            canonical: 'circle'
+        };
+        const seen = {};
+        for (let index = 0; index < parts.length; index++) {
+            const token = parts[index];
+            let match = token.match(/^([1-9]\d*)x$/);
+            if (match) {
+                if (seen.count) return { valid: false };
+                seen.count = true;
+                atom.count = parseInt(match[1], 10);
+                atom.length = atom.count * 4;
+                continue;
+            }
+            if (token === 'cw' || token === 'ccw') {
+                if (seen.direction) return { valid: false };
+                seen.direction = true;
+                atom.direction = token;
+                continue;
+            }
+            return { valid: false };
+        }
+        atom.canonical = circleAtomText(atom);
+        return { valid: true, atom };
+    }
+
+    function circleAtomText(atom) {
+        const out = ['circle'];
+        if (atom.count !== null && atom.count !== undefined && atom.count !== 1) out.push(atom.count + 'x');
+        if (atom.direction) out.push(atom.direction);
+        return out.join(':');
+    }
+
+    function parseArcPathToken(value) {
+        const raw = String(value || '').toLowerCase().trim();
+        const parts = raw.split(':').map(item => item.trim());
+        if (parts.shift() !== 'arc' || parts.some(item => !item)) return { valid: false };
+        const atom = {
+            kind: 'arc',
+            direction: '',
+            length: 3,
+            canonical: 'arc'
+        };
+        const seen = {};
+        for (let index = 0; index < parts.length; index++) {
+            const token = parts[index];
+            if (isCardinalDirection(token)) {
+                if (seen.direction) return { valid: false };
+                seen.direction = true;
+                atom.direction = token;
+                continue;
+            }
+            return { valid: false };
+        }
+        atom.canonical = arcAtomText(atom);
+        return { valid: true, atom };
+    }
+
+    function arcAtomText(atom) {
+        const out = ['arc'];
+        if (atom.direction) out.push(atom.direction);
+        return out.join(':');
+    }
+
+    function pathMatches(value, expected, detail) {
         if (expected === undefined || expected === null) return true;
-        if (Array.isArray(expected)) return expected.some(item => pathMatches(value, item));
+        if (Array.isArray(expected) && !isPathPatternTokenArray(expected)) return expected.some(item => pathMatches(value, item, detail));
         const current = pathTokens(value);
-        const wanted = pathTokens(expected);
-        if (!wanted.length || wanted.length > current.length) return false;
-        const start = current.length - wanted.length;
-        return wanted.every((token, index) => current[start + index] === token);
+        return !!pathPatternSuffixMatch(current, expected, detail);
+    }
+
+    function pathPatternMaxCircleCount(pattern) {
+        const parsed = pattern && pattern.valid !== undefined ? pattern : parsePathPattern(pattern);
+        if (!parsed.valid) return 0;
+        return parsed.atoms.reduce((max, atom) => atom.kind === 'circle' ? Math.max(max, atom.count || 1) : max, 0);
+    }
+
+    function pathPatternSuffixMatch(path, pattern, detail) {
+        const parsed = pattern && pattern.valid !== undefined ? pattern : parsePathPattern(pattern);
+        if (!parsed.valid || !path || parsed.length > path.length) return null;
+        return pathPatternMatchAt(path, parsed, path.length - parsed.length, detail);
+    }
+
+    function pathPatternMatchAt(path, pattern, start, detail) {
+        const parsed = pattern && pattern.valid !== undefined ? pattern : parsePathPattern(pattern);
+        if (!parsed.valid || !path || start < 0 || start + parsed.length > path.length) return null;
+        let index = start;
+        const circles = [];
+        const arcs = [];
+        for (let atomIndex = 0; atomIndex < parsed.atoms.length; atomIndex++) {
+            const atom = parsed.atoms[atomIndex];
+            if (atom.kind === 'direction') {
+                if (path[index] !== atom.direction) return null;
+                index++;
+                continue;
+            }
+            const match = atom.kind === 'circle' ? circleAtomMatch(path.slice(index, index + atom.length), atom) : arcAtomMatch(path.slice(index, index + atom.length), atom);
+            if (!match) return null;
+            const item = Object.assign({}, match, {
+                pattern: atom.canonical,
+                start: index,
+                length: atom.length
+            });
+            if (atom.kind === 'circle') {
+                item.cycles = match.cycles.map(cycle => Object.assign({}, cycle, {
+                    start: index + cycle.start
+                }));
+                circles.push(item);
+            } else {
+                arcs.push(item);
+            }
+            index += atom.length;
+        }
+        const tokens = path.slice(start, start + parsed.length);
+        return {
+            pattern: parsed.canonical,
+            start,
+            length: parsed.length,
+            tokens,
+            pathText: tokens.join('>'),
+            circles,
+            circle: circles[circles.length - 1] || null,
+            arcs,
+            arc: arcs[arcs.length - 1] || null
+        };
+    }
+
+    function pathPatternProgressMatches(pattern, progress, detail) {
+        const parsed = pattern && pattern.valid !== undefined ? pattern : parsePathPattern(pattern);
+        if (!parsed.valid || !progress || progress.length > parsed.length) return false;
+        let offset = 0;
+        for (let index = 0; index < parsed.atoms.length; index++) {
+            const atom = parsed.atoms[index];
+            const remaining = progress.length - offset;
+            if (remaining <= 0) return true;
+            if (atom.kind === 'direction') {
+                if (progress[offset] !== atom.direction) return false;
+                offset++;
+                continue;
+            }
+            const length = Math.min(atom.length, remaining);
+            const tokens = progress.slice(offset, offset + length);
+            if (atom.kind === 'circle' && !circleAtomPrefixMatch(tokens, atom)) return false;
+            if (atom.kind === 'arc' && !arcAtomPrefixMatch(tokens, atom)) return false;
+            offset += length;
+        }
+        return offset === progress.length;
+    }
+
+    function circleAtomMatch(tokens, atom) {
+        if (!tokens || tokens.length !== atom.length) return null;
+        const match = circleTokensMatch(tokens, atom.count, atom.direction, false);
+        if (!match) return null;
+        return Object.assign(match, {
+            path: tokens.slice(),
+            pathText: tokens.join('>'),
+            startDirection: tokens[0],
+            endDirection: tokens[tokens.length - 1]
+        });
+    }
+
+    function circleAtomPrefixMatch(tokens, atom) {
+        if (!tokens || tokens.length > atom.length) return false;
+        return !!circleTokensMatch(tokens, atom.count, atom.direction, true);
+    }
+
+    function arcAtomMatch(tokens, atom) {
+        if (!tokens || tokens.length !== atom.length) return null;
+        const match = arcTokensMatch(tokens, atom.direction, false);
+        if (!match) return null;
+        return Object.assign(match, {
+            path: tokens.slice(),
+            pathText: tokens.join('>'),
+            startDirection: tokens[0],
+            endDirection: tokens[tokens.length - 1]
+        });
+    }
+
+    function arcAtomPrefixMatch(tokens, atom) {
+        if (!tokens || tokens.length > atom.length) return false;
+        return !!arcTokensMatch(tokens, atom.direction, true);
+    }
+
+    function arcTokensMatch(tokens, direction, partial) {
+        if (!partial && (!tokens || tokens.length !== 3)) return null;
+        if (partial && (!tokens || tokens.length > 3)) return null;
+        const candidates = arcCandidates(direction);
+        const match = candidates.find(candidate => tokens.every((token, index) => token === candidate[index]));
+        if (!match) return null;
+        return {
+            direction: match[0],
+            tokens: tokens.slice()
+        };
+    }
+
+    function arcCandidates(direction) {
+        const starts = direction ? [direction] : cardinalDirections;
+        const out = [];
+        starts.forEach(start => {
+            if (!isCardinalDirection(start)) return;
+            const end = oppositeDirection(start);
+            cardinalDirections.forEach(middle => {
+                if (middle !== start && middle !== end) out.push([start, middle, end]);
+            });
+        });
+        return out;
+    }
+
+    function circleTokensMatch(tokens, count, direction, partial) {
+        const circleCount = Math.max(1, count || 1);
+        const maxLength = circleCount * 4;
+        if (!partial && tokens.length !== maxLength) return null;
+        if (partial && tokens.length > maxLength) return null;
+        let resolved = '';
+        const cycles = [];
+        for (let index = 0; index < tokens.length; index += 4) {
+            const cycle = tokens.slice(index, Math.min(index + 4, tokens.length));
+            if (cycle.length < 4) {
+                if (!circleCyclePrefixMatches(cycle, direction || resolved)) return null;
+                return {
+                    direction: resolved || direction || '',
+                    count: circleCount,
+                    tokens: tokens.slice(),
+                    cycles
+                };
+            }
+            const cycleDirection = circleDirection(cycle);
+            if (!cycleDirection) return null;
+            if (direction && cycleDirection !== direction) return null;
+            if (resolved && cycleDirection !== resolved) return null;
+            resolved = cycleDirection;
+            cycles.push({
+                direction: cycleDirection,
+                startDirection: cycle[0],
+                endDirection: cycle[cycle.length - 1],
+                path: cycle.slice(),
+                pathText: cycle.join('>'),
+                start: index,
+                length: 4
+            });
+        }
+        return {
+            direction: resolved || direction || '',
+            count: circleCount,
+            tokens: tokens.slice(),
+            cycles
+        };
+    }
+
+    function circleCyclePrefixMatches(tokens, direction) {
+        if (!tokens || !tokens.length) return true;
+        const directions = direction ? [direction] : circleDirections;
+        return directions.some(item => {
+            const cycle = circleCycle(item);
+            return cycle.some((_, index) => tokens.every((token, offset) => token === cycle[(index + offset) % cycle.length]));
+        });
+    }
+
+    function circleCycle(direction) {
+        return direction === 'ccw' ? ['right', 'up', 'left', 'down'] : ['right', 'down', 'left', 'up'];
+    }
+
+    function circleDirection(tokens) {
+        const path = pathTokens(tokens);
+        if (path.length !== 4) return '';
+        const cw = circleCycle('cw');
+        const ccw = circleCycle('ccw');
+        if (circleCycleMatches(path, cw)) return 'cw';
+        if (circleCycleMatches(path, ccw)) return 'ccw';
+        return '';
+    }
+
+    function circleCycleMatches(path, cycle) {
+        const start = cycle.indexOf(path[0]);
+        if (start < 0) return false;
+        return path.every((token, index) => token === cycle[(start + index) % cycle.length]);
     }
 
     function pointSnapshot(point) {
@@ -704,6 +1294,32 @@
         };
     }
 
+    function gridCellName(cell) {
+        const rowName = cell.row === 0 ? 'top' : cell.row === cell.rows - 1 ? 'bottom' : cell.rows % 2 === 1 && cell.row === Math.floor(cell.rows / 2) ? 'center' : 'row' + cell.row;
+        const colName = cell.col === 0 ? 'left' : cell.col === cell.cols - 1 ? 'right' : cell.cols % 2 === 1 && cell.col === Math.floor(cell.cols / 2) ? 'center' : 'col' + cell.col;
+        if (rowName === 'center' && colName === 'center') return 'center';
+        if (rowName === 'center') return colName;
+        if (colName === 'center') return rowName;
+        return rowName + '-' + colName;
+    }
+
+    function gridMatches(point, criteria) {
+        if (!point || criteria === undefined || criteria === null) return false;
+        if (Array.isArray(criteria)) return criteria.some(item => gridMatches(point, item));
+        const opt = isPlainObject(criteria) ? criteria : { cell: criteria };
+        const cell = gridFor(point, { rows: opt.rows || 3, cols: opt.cols || 3 });
+        if (opt.index !== undefined && !matchValue(cell.index, opt.index)) return false;
+        if (opt.row !== undefined && !matchValue(cell.row, opt.row)) return false;
+        if (opt.col !== undefined && !matchValue(cell.col, opt.col)) return false;
+        if (opt.cell !== undefined && !matchValue(gridCellName(cell), opt.cell)) return false;
+        return true;
+    }
+
+    function tapStartPoint(event) {
+        const taps = event && event.tapSequence && event.tapSequence.taps;
+        return taps && taps[0] ? taps[0].center : null;
+    }
+
     function collectPresetOptions(preset) {
         let out = {};
         if (preset === undefined || preset === null || preset === false) return out;
@@ -726,7 +1342,7 @@
         const preset = source.preset !== undefined ? source.preset : source.presets;
         delete source.preset;
         delete source.presets;
-        return merge(merge(defaults, collectPresetOptions(preset)), source);
+        return normalizeResolvedOptions(merge(merge(defaults, collectPresetOptions(preset)), source));
     }
 
     function resolvePartialOptions(options) {
@@ -734,7 +1350,14 @@
         const preset = source.preset !== undefined ? source.preset : source.presets;
         delete source.preset;
         delete source.presets;
-        return merge(collectPresetOptions(preset), source);
+        return normalizeResolvedOptions(merge(collectPresetOptions(preset), source));
+    }
+
+    function normalizeResolvedOptions(options) {
+        if (options && options.path && options.path.consume !== undefined) {
+            options.path.consume = normalizePathConsumeMode(options.path.consume);
+        }
+        return options;
     }
 
     const presetRegistry = {
@@ -742,7 +1365,6 @@
             return merge({
                 preventDefault: false,
                 claim: { enabled: true, threshold: 0.5, preventDefault: true },
-                intent: { events: ['tap', 'pan', 'swipe', 'pinch', 'rollingtap', 'modifiertap', 'modifierpan'] },
                 press: { enabled: false },
                 pan: { threshold: 15, fingers: [1], canStart: event => event.tapHold },
                 rotate: { enabled: false }
@@ -759,7 +1381,6 @@
             return merge({
                 preventDefault: false,
                 claim: { enabled: true, threshold: 0.55, preventDefault: true },
-                intent: { events: ['swipe'] },
                 pan: { enabled: false },
                 pinch: { enabled: false },
                 rotate: { enabled: false },
@@ -802,7 +1423,7 @@
             this.updateExplicitGestureToggles(options || {});
             this.options = resolveOptions(options || {});
             this.listeners = new Map();
-            this.optionListeners = [];
+            this.listenerOrder = 0;
             this.onceWrappers = new Map();
             this.native = [];
             this.points = new Map();
@@ -847,7 +1468,6 @@
                 clearselection: () => this.clearNativeSelection()
             };
 
-            this.bindOptionCallbacks(this.options);
             if (this.enabled) this.applyTargetStyles();
             this.bind();
         }
@@ -861,7 +1481,7 @@
         }
 
         static preset(name, options) {
-            return merge(collectPresetOptions(name), options || {});
+            return resolvePartialOptions(options === undefined ? name : [name, options]);
         }
 
         time() {
@@ -874,37 +1494,6 @@
             if (this.options.input === 'mouse') return 'mouse';
             if (this.options.input === 'hybrid') return 'hybrid';
             return typeof PointerEvent !== 'undefined' ? 'pointer' : 'hybrid';
-        }
-
-        bindOptionCallbacks(options) {
-            this.unbindOptionCallbacks();
-            Object.keys(eventAliases).forEach(key => {
-                if (typeof options[key] === 'function') this.addOptionCallback(eventAliases[key], options[key]);
-            });
-
-            if (options.callbacks) {
-                Object.keys(options.callbacks).forEach(type => {
-                    const handlers = toArray(options.callbacks[type]);
-                    handlers.forEach(handler => {
-                        if (typeof handler === 'function') this.addOptionCallback(type, handler);
-                    });
-                });
-            }
-        }
-
-        addOptionCallback(type, handler) {
-            this.on(type, handler);
-            this.optionListeners.push({ type, handler });
-        }
-
-        unbindOptionCallbacks() {
-            if (!this.optionListeners || !this.optionListeners.length) return;
-            this.optionListeners.forEach(item => {
-                const set = this.listeners.get(item.type);
-                if (set) set.delete(item.handler);
-            });
-            this.optionListeners = [];
-            this.invalidateIntent();
         }
 
         bind() {
@@ -949,40 +1538,72 @@
             return typeof window !== 'undefined' ? window : this.target;
         }
 
-        on(type, criteria, handler) {
-            if (this.destroyed) return this;
-            if (typeof criteria === 'function' && handler === undefined) {
+        listenerArgs(type, criteria, handler, options) {
+            let phaseOptions = options || null;
+            if (typeof criteria === 'function') {
+                if (isPlainObject(handler)) phaseOptions = handler;
                 handler = criteria;
                 criteria = null;
             }
             if (typeof handler !== 'function') throw new TypeError('HandTrick handler must be a function');
             type = normalizeEventType(type);
-            const listener = criteria ? detail => {
-                if (HandTrick.matches(detail, criteria || {})) handler(detail);
-            } : handler;
-            if (!this.listeners.has(type)) this.listeners.set(type, new Set());
-            this.listeners.get(type).add(listener);
-            this.activateListener(type);
+            criteria = criteria || null;
+            const sequence = isSequencePatternEvent(type) ? parseSequenceSelector(type) : null;
+            const parsed = sequence ? null : parseEventSelector(type);
+            return {
+                type,
+                parsed,
+                sequence,
+                criteria: criteria || null,
+                handler,
+                phase: this.listenerPhase(type, phaseOptions && phaseOptions.phase)
+            };
+        }
+
+        listenerPhase(type, phase) {
+            const value = String(phase || '').toLowerCase();
+            if (value === 'command' || value === 'observe' || value === 'intent' || value === 'update') return value;
+            if (type === '*' || additiveEventTypes[type]) return 'observe';
+            return 'command';
+        }
+
+        addListenerRecord(args) {
+            const record = {
+                type: args.type,
+                criteria: args.criteria,
+                handler: args.handler,
+                phase: args.phase,
+                parsed: args.parsed,
+                sequence: args.sequence,
+                order: ++this.listenerOrder
+            };
+            if (!this.listeners.has(record.type)) this.listeners.set(record.type, new Set());
+            this.listeners.get(record.type).add(record);
+            this.activateListener(record.type);
             this.invalidateIntent();
+            return record;
+        }
+
+        on(type, criteria, handler, options) {
+            if (this.destroyed) return this;
+            this.addListenerRecord(this.listenerArgs(type, criteria, handler, options));
             return this;
         }
 
-        once(type, criteria, handler) {
+        once(type, criteria, handler, options) {
             if (this.destroyed) return this;
-            if (typeof criteria === 'function' && handler === undefined) {
-                handler = criteria;
-                criteria = null;
-            }
-            if (typeof handler !== 'function') throw new TypeError('HandTrick handler must be a function');
-            type = normalizeEventType(type);
+            const args = this.listenerArgs(type, criteria, handler, options);
+            type = args.type;
+            const original = args.handler;
             const wrap = detail => {
-                if (criteria && !HandTrick.matches(detail, criteria || {})) return;
-                this.off(type, handler);
-                handler(detail);
+                this.off(type, original);
+                original(detail);
             };
             if (!this.onceWrappers.has(type)) this.onceWrappers.set(type, new Map());
-            this.onceWrappers.get(type).set(handler, wrap);
-            return this.on(type, wrap);
+            this.onceWrappers.get(type).set(original, wrap);
+            args.handler = wrap;
+            this.addListenerRecord(args);
+            return this;
         }
 
         off(type, handler) {
@@ -1000,7 +1621,9 @@
             if (handler) {
                 const wraps = this.onceWrappers.get(type);
                 const wrap = wraps && wraps.get(handler);
-                set.delete(wrap || handler);
+                Array.from(set).forEach(record => {
+                    if (record.handler === handler || record.handler === wrap) set.delete(record);
+                });
                 if (wraps) wraps.delete(handler);
             } else {
                 set.clear();
@@ -1010,27 +1633,48 @@
             return this;
         }
 
-        when(type, criteria, handler) {
-            if (typeof criteria === 'function' && handler === undefined) return this.on(type, criteria);
-            return this.on(type, criteria, handler);
+        command(type, criteria, handler) {
+            return this.on(type, criteria, handler, { phase: 'command' });
         }
 
-        emit(type, detail) {
+        observe(type, criteria, handler) {
+            return this.on(type, criteria, handler, { phase: 'observe' });
+        }
+
+        listenerMatches(record, data, options) {
+            if (!record) return false;
+            if (options && options.phases && !options.phases.includes(record.phase)) return false;
+            if (!(options && options.pathArbitrated) && this.pathCriteriaPatterns(record.criteria).length && data && data.type === 'path') return false;
+            return this.recordCriteriaMatches(record, data);
+        }
+
+        recordCriteriaMatches(record, data) {
+            return !record.criteria || HandTrick.matches(data, record.criteria);
+        }
+
+        runListenerRecord(record, data) {
+            record.handler(data);
+        }
+
+        runListeners(type, data, options) {
+            const set = this.listeners.get(type);
+            if (!set) return;
+            Array.from(set).forEach(record => {
+                if (this.listenerMatches(record, data, options)) this.runListenerRecord(record, data);
+            });
+        }
+
+        emit(type, detail, options) {
             if (this.destroyed) return detail || {};
+            type = normalizeEventType(type);
             const data = Object.assign({}, detail || {}, { type });
             Object.defineProperty(data, 'instance', {
                 value: this,
                 enumerable: false,
                 configurable: true
             });
-            const run = eventType => {
-                const set = this.listeners.get(eventType);
-                if (!set) return;
-                Array.from(set).forEach(handler => handler(data));
-            };
-
-            run(type);
-            run('*');
+            this.runListeners(type, data, options);
+            this.runListeners('*', data, options);
             return data;
         }
 
@@ -1042,7 +1686,6 @@
             const after = this.listenerKey();
             this.invalidateIntent();
             this.staticRect = null;
-            this.bindOptionCallbacks(this.options);
             if (before !== after) {
                 this.cancel('rebind');
                 this.unbindNative();
@@ -1088,7 +1731,7 @@
                         scan(value[key]);
                         return;
                     }
-                    if (!activatableGestures[key] || !isPlainObject(value[key]) || value[key].enabled === undefined) return;
+                    if (!activatableRecognizers[key] || !isPlainObject(value[key]) || value[key].enabled === undefined) return;
                     if (value[key].enabled === false) this.explicitGestureDisabled.add(key);
                     else this.explicitGestureDisabled.delete(key);
                 });
@@ -1106,11 +1749,14 @@
         listenerGestureGroups(type) {
             const groups = new Set();
             const add = value => {
-                const group = gestureForEvent(value);
+                const group = eventRecognizerGroup(value);
                 if (group) groups.add(group);
             };
             if (!type || type === '*') return [];
-            if (isSequencePatternEvent(type)) sequenceTokens(type).forEach(add);
+            if (isSequencePatternEvent(type)) parseSequenceSelector(type).parsed.forEach(parsed => {
+                const group = eventRecognizerGroup(parsed);
+                if (group) groups.add(group);
+            });
             else add(type);
             return Array.from(groups);
         }
@@ -1137,7 +1783,7 @@
         reset(options) {
             const opt = options || {};
             if (!options || opt.taps) this.resetTaps();
-            if (!options || opt.gestures || opt.sequences) this.resetSequences();
+            if (!options || opt.sequences) this.resetSequences();
             return this;
         }
 
@@ -1157,7 +1803,6 @@
             this.unbindNative();
             this.listeners.clear();
             this.onceWrappers.clear();
-            this.optionListeners = [];
             this.tapMemory = null;
             this.lastTap = null;
             this.nativeTapMemory = null;
@@ -1189,9 +1834,9 @@
                 this.emitStartedEnds(extra && extra.originalEvent, { reason: reason || 'cancel' }, false);
                 this.emitModifierPanEnd('keyboardModifier', extra && extra.originalEvent, false);
                 this.emitModifierPanEnd('modifier', extra && extra.originalEvent, false);
-                const detail = this.detail('cancel', Object.assign({ reason: reason || 'cancel' }, extra || {}));
-                this.emit('gesturecancel', Object.assign({}, detail, { gesture: this.primaryGesture() }));
-                this.emit('cancel', detail);
+                const detail = this.detail('session:cancel', Object.assign({ reason: reason || 'cancel' }, extra || {}));
+                this.emit('gesture:cancel', Object.assign({}, detail, { gesture: this.primaryGesture() }));
+                this.emit('session:cancel', detail);
             }
 
             this.points.clear();
@@ -1206,9 +1851,13 @@
             if (!this.session) return;
             const flag = name + 'Started';
             if (!this.session[flag]) return;
-            const detail = this.detail(name + 'end', Object.assign({ originalEvent: event }, extra || {}));
+            const endType = name + ':end';
+            const detail = this.detail(endType, Object.assign({ originalEvent: event }, extra || {}));
             if (name === 'path') this.emitPathEnd(detail);
-            else this.emit(name + 'end', detail);
+            else {
+                this.emit(endType, detail);
+                if ((name === 'pinch' || name === 'rotate') && this.session[name + 'Modified']) this.emit(name + ':mod:end', detail);
+            }
             if (reset && name !== 'path') this.session[flag] = false;
         }
 
@@ -1220,8 +1869,8 @@
             const mod = this.session && this.session[kind];
             if (!mod || !mod.panStarted) return;
             const point = this.points.get(mod.actionId);
-            const detail = kind === 'keyboardModifier' ? this.keyboardModifierDetail('modifierpanend', event, point) : this.modifierDetail('modifierpanend', event, point);
-            this.emit('modifierpanend', detail);
+            const detail = kind === 'keyboardModifier' ? this.keyboardModifierDetail('pan:mod:end', event, point) : this.modifierDetail('pan:mod:end', event, point);
+            this.emit('pan:mod:end', detail);
             if (reset) mod.panStarted = false;
         }
 
@@ -1241,7 +1890,7 @@
             return {
                 pruned: state.pruned,
                 groups: state.groups ? Array.from(state.groups).sort() : null,
-                events: this.options.intent && Array.isArray(this.options.intent.events) ? this.options.intent.events.slice() : null
+                events: this.options.intent && Array.isArray(this.options.intent.events) ? this.options.intent.events.map(normalizeEventType) : null
             };
         }
 
@@ -1442,7 +2091,7 @@
         guard(event, target) {
             if (!this.enabled) return false;
             if (this.isIgnored(event, target)) {
-                this.emit('ignored', { originalEvent: event, target });
+                this.emit('input:ignored', { originalEvent: event, target });
                 return false;
             }
             this.prepareEvent(event, this.options.preventDefault);
@@ -1591,7 +2240,7 @@
             const changedPointers = ids.map(id => this.exportPoint(this.points.get(id), rect)).filter(Boolean);
             const changedPointer = changedPointers[changedPointers.length - 1] || null;
             const countBefore = this.points.size;
-            const releaseDetail = this.detail(cancelled ? 'cancel' : 'end', {
+            const releaseDetail = this.detail(cancelled ? 'session:cancel' : 'session:end', {
                 originalEvent: event,
                 changedPointer,
                 changedPointers
@@ -1621,7 +2270,7 @@
             this.points.clear();
             this.pointsDirty = true;
             this.pointCache = [];
-            const endingDetail = this.detail('end', {
+            const endingDetail = this.detail('session:end', {
                 originalEvent: event,
                 changedPointer,
                 changedPointers,
@@ -1637,7 +2286,7 @@
         wheel(event) {
             if (!this.enabled) return;
             if (this.isIgnored(event, event.target)) {
-                this.emit('ignored', {
+                this.emit('input:ignored', {
                     originalEvent: event,
                     target: event.target,
                     currentTarget: this.target,
@@ -1709,7 +2358,7 @@
                 axis: axisFrom(directionFrom(deltaX, delta, this.options.swipe.axisRatio)),
                 phase: 'active',
                 intent: {
-                    gesture: scale !== 1 ? 'wheelzoom' : 'wheel',
+                    gesture: scale !== 1 ? 'wheel:zoom' : 'wheel',
                     committedAt: this.time(),
                     possible: ['wheel'],
                     pruned: this.intentState().pruned,
@@ -1732,10 +2381,10 @@
                 }
             };
 
-            this.emit('gesturecommit', Object.assign({}, detail, { gesture: scale !== 1 ? 'wheelzoom' : 'wheel' }));
-            this.recordGestureSequence(scale !== 1 ? 'wheelzoom' : 'wheel', detail, 1);
+            this.emit('gesture:commit', Object.assign({}, detail, { gesture: scale !== 1 ? 'wheel:zoom' : 'wheel' }));
+            this.recordGestureSequence(scale !== 1 ? 'wheel:zoom' : 'wheel', detail, 1);
             this.emit('wheel', detail);
-            if (scale !== 1) this.emit('wheelzoom', detail);
+            if (scale !== 1) this.emit('wheel:zoom', detail);
         }
 
         wheelPixels(value, mode, rect) {
@@ -1825,7 +2474,10 @@
             };
 
             const activeBefore = this.session ? this.pointList() : [];
-            if (this.session) this.endRunningGestures(event);
+            if (this.session) {
+                this.endRunningGestures(event);
+                this.releaseKeyboardModifierForMultiTouch();
+            }
 
             this.points.set(id, point);
             this.pointsDirty = true;
@@ -1841,18 +2493,18 @@
                 const keyboardOpt = this.options.modifier.keyboard || {};
                 if (this.session.tapHold || this.session.tapChain || ((this.session.keyboardModifier || this.session.keyboardSubstitute) && keyboardOpt.preventNative !== false)) this.suppressNative(event);
                 if (!this.session.keyboardModifier) this.armPress(event);
-                const detail = this.detail('start', { originalEvent: event, added: 1, removed: 0, changedPointer: this.exportPoint(point, this.rect()) });
-                this.emit('start', detail);
-                this.emit('gesturestart', Object.assign({}, detail, { gesture: 'session' }));
+                const detail = this.detail('session:start', { originalEvent: event, added: 1, removed: 0, changedPointer: this.exportPoint(point, this.rect()) });
+                this.emit('session:start', detail);
+                this.emit('gesture:start', Object.assign({}, detail, { gesture: 'session' }));
             } else {
-                this.cancelPress('fingerchange');
+                this.cancelPress('fingers:change');
                 this.session.releaseGuard = null;
                 this.startModifier(id, point, activeBefore, time);
                 this.addRollingPoint(id, point, time);
                 this.resetBasis(time);
-                const detail = this.detail('fingerchange', { originalEvent: event, change: 'add', added: 1, removed: 0, changedPointer: this.exportPoint(point, this.rect()) });
-                this.emit('fingerchange', detail);
-                this.emit('gesturetransition', Object.assign({}, detail, { gesture: 'topology' }));
+                const detail = this.detail('fingers:change', { originalEvent: event, change: 'add', added: 1, removed: 0, changedPointer: this.exportPoint(point, this.rect()) });
+                this.emit('fingers:change', detail);
+                this.emit('gesture:transition', Object.assign({}, detail, { gesture: 'topology' }));
             }
         }
 
@@ -1894,8 +2546,10 @@
                 panAxis: null,
                 pinchStarted: false,
                 pinchBaseDistance: null,
+                pinchModified: false,
                 rotateStarted: false,
                 rotateBaseAngle: null,
+                rotateModified: false,
                 pathStarted: false,
                 path: null,
                 swipeIntentAt: 0,
@@ -1913,6 +2567,13 @@
                 history: [],
                 rect: null
             };
+        }
+
+        releaseKeyboardModifierForMultiTouch() {
+            if (!this.session || !this.session.keyboardModifier) return;
+            this.session.keyboardModifier.cancelled = true;
+            this.session.keyboardModifier = null;
+            if (!this.session.modifier) this.session.consumed = false;
         }
 
         updatePoint(id, input, event, raw) {
@@ -1962,9 +2623,9 @@
                     pointers: []
                 });
                 else {
-                    const detail = this.detail('fingerchange', { originalEvent: event, change: 'cancel', added: 0, removed: 1, changedPointer });
-                    this.emit('fingerchange', detail);
-                    this.emit('gesturetransition', Object.assign({}, detail, { gesture: 'topology' }));
+                    const detail = this.detail('fingers:change', { originalEvent: event, change: 'cancel', added: 0, removed: 1, changedPointer });
+                    this.emit('fingers:change', detail);
+                    this.emit('gesture:transition', Object.assign({}, detail, { gesture: 'topology' }));
                 }
                 return;
             }
@@ -1972,7 +2633,8 @@
             this.endKeyboardModifier(id, point, event);
             this.endModifier(id, point, event);
             this.endRollingPoint(id, this.time());
-            const releaseDetail = this.detail('end', { originalEvent: event, changedPointer });
+            const releaseDetail = this.detail('session:end', { originalEvent: event, changedPointer });
+            this.resolvePathRelease(releaseDetail);
 
             if (countBefore > 1 && !this.session.consumed && this.isSwipe(releaseDetail)) {
                 this.emitSwipe(releaseDetail);
@@ -1982,17 +2644,17 @@
             this.pointsDirty = true;
 
             if (this.points.size) {
-                this.cancelPress('fingerchange');
+                this.cancelPress('fingers:change');
                 this.endRunningGestures(event);
                 this.markReleaseGuard(countBefore);
                 this.resetBasis(this.time());
-                const detail = this.detail('fingerchange', { originalEvent: event, change: 'remove', added: 0, removed: 1, changedPointer });
-                this.emit('fingerchange', detail);
-                this.emit('gesturetransition', Object.assign({}, detail, { gesture: 'topology' }));
+                const detail = this.detail('fingers:change', { originalEvent: event, change: 'remove', added: 0, removed: 1, changedPointer });
+                this.emit('fingers:change', detail);
+                this.emit('gesture:transition', Object.assign({}, detail, { gesture: 'topology' }));
                 return;
             }
 
-            const endingDetail = this.detail('end', {
+            const endingDetail = this.detail('session:end', {
                 originalEvent: event,
                 changedPointer,
                 added: 0,
@@ -2049,6 +2711,12 @@
             return guarded;
         }
 
+        resolvePathRelease(detail) {
+            const path = this.session && this.session.path;
+            if (!path || !path.segments.length) return;
+            this.handlePath(detail);
+        }
+
         finishSession(event, endingDetail) {
             const session = this.session;
             if (!session) return;
@@ -2074,30 +2742,30 @@
             }
 
             const endDetail = endingDetail || detail;
-            this.emit('gestureend', Object.assign({}, endDetail, { gesture: this.primaryGesture() }));
-            this.emit('end', endDetail);
+            this.emit('gesture:end', Object.assign({}, endDetail, { gesture: this.primaryGesture() }));
+            this.emit('session:end', endDetail);
             this.session = null;
             this.releaseGestureStyles();
         }
 
         processMove(event) {
             if (!this.session || !this.points.size) return;
-            const detail = this.detail('move', { originalEvent: event });
+            const detail = this.detail('session:move', { originalEvent: event });
             const releaseGuarded = this.releaseGuardActive();
             detail.releaseGuarded = releaseGuarded;
             this.session.maxFingers = Math.max(this.session.maxFingers, detail.fingers);
             this.session.maxActualFingers = Math.max(this.session.maxActualFingers || 0, detail.actualFingers || this.points.size);
             this.session.center = detail.center;
             this.session.moved = this.session.moved || detail.travel > this.options.tap.maxMove;
-            this.emit('move', detail);
-            this.emit('gestureupdate', Object.assign({}, detail, { gesture: this.primaryGesture() }));
+            this.emit('session:move', detail);
+            this.emit('gesture:update', Object.assign({}, detail, { gesture: this.primaryGesture() }));
 
             if (this.options.pressure.enabled && abs(detail.pressureDelta) >= this.options.pressure.threshold) {
-                this.emit('pressurechange', detail);
+                this.emit('pressure:change', detail);
             }
 
             if (!this.session.pressStarted && detail.travel > this.options.press.move) this.cancelPress('move');
-            if (this.session.pressStarted) this.emit('pressmove', detail);
+            if (this.session.pressStarted) this.emit('press:move', detail);
 
             const keyboardModifierActive = this.handleKeyboardModifierMove(event);
             if (releaseGuarded) {
@@ -2136,8 +2804,8 @@
             if (this.session.panStarted) return 'pan';
             if (this.session.pathStarted) return 'path';
             if (this.session.pressStarted) return 'press';
-            if (this.session.keyboardModifier && this.session.keyboardModifier.panStarted) return 'modifierpan';
-            if (this.session.modifier && this.session.modifier.panStarted) return 'modifierpan';
+            if (this.session.keyboardModifier && this.session.keyboardModifier.panStarted) return 'pan:mod';
+            if (this.session.modifier && this.session.modifier.panStarted) return 'pan:mod';
             return 'session';
         }
 
@@ -2152,10 +2820,15 @@
                     groups.add('path');
                     return;
                 }
-                sequenceTokens(type).forEach(token => {
-                    const gesture = gestureForEvent(token);
-                    if (gesture) groups.add(gesture);
-                });
+                if (isSequencePatternEvent(type)) {
+                    parseSequenceSelector(type).parsed.forEach(parsed => {
+                        const gesture = eventRecognizerGroup(parsed);
+                        if (gesture) groups.add(gesture);
+                    });
+                    return;
+                }
+                const gesture = eventRecognizerGroup(type);
+                if (gesture) groups.add(gesture);
             };
             const explicit = Array.isArray(opt.events);
 
@@ -2163,7 +2836,7 @@
                 opt.events.forEach(add);
             }
 
-            if (opt.useCallbacks !== false) {
+            if (opt.useListeners !== false) {
                 this.listeners.forEach((set, type) => {
                     if (!set || !set.size || type === '*') return;
                     add(type);
@@ -2184,12 +2857,12 @@
 
         possibleGestures(detail) {
             const out = [];
-            continuousGestures.forEach(gesture => {
+            motionCandidateRecognizers.forEach(gesture => {
                 if (!this.allowsGesture(gesture)) return;
                 const opt = this.options[gesture];
                 if (!opt || !opt.enabled) return;
                 if (gesture === 'pan' && !toArray(opt.fingers).includes(detail.fingers)) return;
-                if ((gesture === 'pinch' || gesture === 'rotate') && detail.fingers !== opt.fingers) return;
+                if ((gesture === 'pinch' || gesture === 'rotate') && detail.fingers !== 2) return;
                 out.push(gesture);
             });
             if (this.allowsGesture('tap') && this.options.tap.enabled) out.push('tap');
@@ -2201,13 +2874,13 @@
         }
 
         continuousCandidates(detail) {
-            return continuousGestures.filter(gesture => {
+            return motionCandidateRecognizers.filter(gesture => {
                 if (!this.allowsGesture(gesture)) return false;
                 const opt = this.options[gesture];
                 if (!opt || !opt.enabled) return false;
                 if (gesture === 'pan') return toArray(opt.fingers).includes(detail.fingers);
                 if (gesture === 'swipe') return detail.direction !== 'none';
-                return detail.fingers === opt.fingers;
+                return detail.fingers === 2;
             });
         }
 
@@ -2227,7 +2900,7 @@
             this.session.commits[gesture] = true;
             this.session.intent.gesture = gesture;
             this.session.intent.committedAt = this.time();
-            this.emit('gesturecommit', Object.assign({}, detail, { gesture, confidence }));
+            this.emit('gesture:commit', Object.assign({}, detail, { gesture, confidence }));
             return this.recordGestureSequence(gesture, detail, confidence);
         }
 
@@ -2245,15 +2918,25 @@
             const windowTime = opt.sequenceWindow || 0;
             const max = Math.max(1, opt.sequenceMax || 1);
             const last = this.gestureSequence[this.gestureSequence.length - 1];
-            const baseGesture = gestureForEvent(gesture) || gesture;
+            const parsed = parseEventSelector(gesture);
+            const baseGesture = eventRecognizerGroup(parsed) || parsed.family || gesture;
 
             if (last && windowTime && time - last.time > windowTime) this.gestureSequence = [];
 
             this.gestureSequence.push({
                 event: gesture,
                 gesture: baseGesture,
+                family: parsed.family,
+                mode: parsed.mode,
+                state: parsed.state,
                 time,
-                fingers: detail.fingers,
+                fingers: parsed.fingers !== null ? parsed.fingers : detail.fingers,
+                actualFingers: detail.actualFingers,
+                syntheticFingers: detail.syntheticFingers,
+                fingerSource: detail.fingerSource,
+                keyboardRole: detail.keyboardSubstitute && detail.keyboardSubstitute.role || '',
+                keys: detail.keys ? detail.keys.slice() : [],
+                keyCombo: detail.keyCombo || '',
                 direction: detail.direction,
                 tapCount: detail.tapCount || 0,
                 center: detail.center
@@ -2270,6 +2953,8 @@
 
             this.listeners.forEach((set, type) => {
                 if (!set || !set.size || !isSequencePatternEvent(type)) return;
+                const records = Array.from(set).filter(record => record.phase === 'command');
+                if (!records.length) return;
                 const rawTokens = sequenceTokens(type);
                 const pattern = sequencePattern(rawTokens);
                 if (!pattern.length) return;
@@ -2282,14 +2967,8 @@
                 }
                 const start = this.gestureSequence.length - pattern.length;
                 const sequence = this.gestureSequence.slice(start).map(item => Object.assign({}, item));
-                matches.push({
-                    type,
-                    rawTokens,
-                    pattern,
-                    sequence,
-                    order,
-                    specificity: this.sequenceSpecificity(pattern),
-                    detail: Object.assign({}, detail, {
+                records.forEach(record => {
+                    const sequenceDetail = Object.assign({}, detail, {
                         gesture,
                         confidence,
                         sequence: pattern.map(item => item.token),
@@ -2302,7 +2981,19 @@
                             duration: time - sequence[0].time,
                             resolution: 'exclusive'
                         }
-                    })
+                    });
+                    const eventData = Object.assign({}, sequenceDetail, { type });
+                    if (!this.listenerMatches(record, eventData)) return;
+                    matches.push({
+                        type,
+                        rawTokens,
+                        pattern,
+                        sequence,
+                        order: record.order,
+                        specificity: this.sequenceSpecificity(pattern) + this.criteriaSpecificity(record.criteria),
+                        detail: sequenceDetail,
+                        record
+                    });
                 });
                 order++;
             });
@@ -2312,8 +3003,8 @@
 
             if (best) {
                 this.clearPendingEmits();
-                if (possible) this.queueDirectEmits([{ type: best.type, detail: best.detail }]);
-                else this.emit(best.type, best.detail);
+                this.emit(best.type, best.detail, { phases: ['observe', 'intent', 'update'] });
+                this.emitCommandRecord(best.record, best.type, best.detail);
                 return { matched: true, possible, type: best.type };
             }
 
@@ -2346,8 +3037,10 @@
             if (!item || !matcher) return false;
             const token = matcher.token;
             if (item.gesture !== token && item.event !== token) return false;
+            if (matcher.mode && matcher.mode !== 'sequence' && matcher.mode !== 'multi' && item.mode !== matcher.mode) return false;
+            if (matcher.state && item.state !== matcher.state) return false;
             if (matcher.tapCount !== null && item.tapCount !== matcher.tapCount) return false;
-            if (matcher.multitap && item.tapCount < 2) return false;
+            if (matcher.multiTap && item.tapCount < 2) return false;
             if (matcher.direction && item.direction !== matcher.direction) return false;
             if (matcher.fingers !== null && item.fingers !== matcher.fingers) return false;
             return true;
@@ -2355,28 +3048,124 @@
 
         sequenceSpecificity(pattern) {
             return pattern.reduce((score, matcher) => {
-                let value = score;
-                if (matcher.direction) value += 3;
-                if (matcher.fingers !== null) value += 2;
-                if (matcher.tapCount !== null) value += 2;
-                if (matcher.multitap) value += 1;
-                if (matcher.raw !== matcher.token) value += 1;
-                return value;
+                return score + (matcher.specificity || 100);
             }, 0);
+        }
+
+        criteriaSpecificity(criteria) {
+            if (!criteria || !isPlainObject(criteria)) return 0;
+            return Object.keys(criteria).reduce((score, key) => {
+                const value = criteria[key];
+                if (value === undefined || value === null) return score;
+                if (Array.isArray(value)) return score + Math.max(1, 4 - value.length);
+                if (isPlainObject(value)) return score + 2 + Object.keys(value).length;
+                return score + 2;
+            }, 0);
+        }
+
+        criteriaKey(criteria) {
+            if (!criteria || !isPlainObject(criteria)) return '';
+            return this.criteriaValueKey(criteria);
+        }
+
+        criteriaValueKey(value) {
+            if (Array.isArray(value)) return '[' + value.map(item => this.criteriaValueKey(item)).sort().join('|') + ']';
+            if (isPlainObject(value)) {
+                return '{' + Object.keys(value).sort().map(key => {
+                    const item = value[key];
+                    if (item === undefined || item === null) return '';
+                    return key + ':' + this.criteriaValueKey(item);
+                }).filter(Boolean).join('|') + '}';
+            }
+            return typeof value + ':' + String(value);
+        }
+
+        eventSpecificity(type, detail) {
+            if (isSequencePatternEvent(type)) return 1000 + this.sequenceSpecificity(sequencePattern(type));
+            return selectorSpecificity(parseEventSelector(type));
+        }
+
+        commandCandidates(items) {
+            const out = [];
+            (items || []).forEach((item, itemIndex) => {
+                const type = normalizeEventType(item.type);
+                const detail = item.detail || {};
+                if (item.record) {
+                    const data = Object.assign({}, detail, { type });
+                    const record = item.record;
+                    if (record.phase === 'command' && this.listenerMatches(record, data, { pathArbitrated: true })) {
+                        out.push({
+                            record,
+                            type,
+                            detail,
+                            itemIndex,
+                            specificity: this.eventSpecificity(type, detail) + this.criteriaSpecificity(record.criteria),
+                            criteriaKey: this.criteriaKey(record.criteria)
+                        });
+                    }
+                    return;
+                }
+                const set = this.listeners.get(type);
+                if (!set) return;
+                const data = Object.assign({}, detail, { type });
+                Array.from(set).forEach(record => {
+                    if (record.phase !== 'command' || !this.listenerMatches(record, data)) return;
+                    out.push({
+                        record,
+                        type,
+                        detail,
+                        itemIndex,
+                        specificity: this.eventSpecificity(type, detail) + this.criteriaSpecificity(record.criteria),
+                        criteriaKey: this.criteriaKey(record.criteria)
+                    });
+                });
+            });
+            return out;
+        }
+
+        emitCommandRecord(record, type, detail) {
+            const data = this.emit(type, detail, { phases: [] });
+            this.runListenerRecord(record, data);
+            return data;
+        }
+
+        emitCommandWinner(items) {
+            const candidates = this.commandCandidates(items);
+            if (!candidates.length) return null;
+            candidates.sort((a, b) => b.specificity - a.specificity || b.itemIndex - a.itemIndex || a.record.order - b.record.order);
+            const winner = candidates[0];
+            candidates.filter(item => (
+                item.type === winner.type &&
+                item.specificity === winner.specificity &&
+                item.criteriaKey === winner.criteriaKey
+            )).sort((a, b) => a.record.order - b.record.order).forEach(item => {
+                this.emitCommandRecord(item.record, item.type, item.detail);
+            });
+            return winner;
+        }
+
+        emitObservedItems(items) {
+            (items || []).forEach(item => {
+                this.emit(item.type, item.detail, { phases: ['observe', 'intent', 'update'] });
+            });
         }
 
         queueDirectEmits(items, delay) {
             if (!items || !items.length || this.destroyed) return;
+            this.emitObservedItems(items);
             this.pendingEmits = this.pendingEmits.concat(items.map(item => ({
                 type: item.type,
-                detail: item.detail
+                detail: item.detail,
+                observed: true
             })));
             this.schedulePendingEmits(delay);
         }
 
         emitDirectEmits(items) {
             if (!items || !items.length) return;
-            items.forEach(item => this.emit(item.type, item.detail));
+            const fresh = items.filter(item => !item.observed);
+            if (fresh.length) this.emitObservedItems(fresh);
+            this.emitCommandWinner(items);
         }
 
         schedulePendingEmits(delay) {
@@ -2525,17 +3314,17 @@
                 mod.cancelled = true;
                 return;
             }
-            const detail = this.modifierDetail('modifiermove', event, action);
+            const detail = this.modifierDetail('pan:mod', event, action);
             if (!mod.panStarted) {
                 if (detail.actionTravel < this.options.modifier.panThreshold) return;
                 if (this.time() - mod.startTime < this.options.modifier.panDelay) return;
                 mod.panStarted = true;
                 this.session.consumed = true;
-                this.cancelPress('modifierpan');
-                this.commit('modifierpan', detail, 1);
-                this.emit('modifierpanstart', detail);
+                this.cancelPress('pan:mod');
+                this.commit('pan:mod', detail, 1);
+                this.emit('pan:mod:start', detail);
             }
-            this.emit('modifierpan', detail);
+            this.emit('pan:mod', detail);
         }
 
         handleKeyboardModifierMove(event) {
@@ -2543,19 +3332,19 @@
             if (!mod || mod.ended || mod.cancelled) return false;
             const action = this.points.get(mod.actionId);
             if (!action) return false;
-            const detail = this.keyboardModifierDetail('modifiermove', event, action);
+            const detail = this.keyboardModifierDetail('pan:mod', event, action);
 
             if (!mod.panStarted) {
                 if (detail.actionTravel < this.options.modifier.panThreshold) return true;
                 if (this.time() - mod.startTime < this.options.modifier.panDelay) return true;
                 mod.panStarted = true;
                 this.session.consumed = true;
-                this.cancelPress('keyboardmodifierpan');
-                this.commit('modifierpan', detail, 1);
-                this.emit('modifierpanstart', detail);
+                this.cancelPress('keyboard-pan:mod');
+                this.commit('pan:mod', detail, 1);
+                this.emit('pan:mod:start', detail);
             }
 
-            this.emit('modifierpan', detail);
+            this.emit('pan:mod', detail);
             return true;
         }
 
@@ -2563,10 +3352,11 @@
             const mod = this.session && this.session.modifier;
             if (!mod || mod.actionId !== id || mod.ended || mod.cancelled) return;
             mod.ended = true;
-            const detail = this.modifierDetail(mod.panStarted ? 'modifierpanend' : 'modifiertap', event, point);
+            const tapType = 'tap:mod';
+            const detail = this.modifierDetail(mod.panStarted ? 'pan:mod:end' : tapType, event, point);
 
             if (mod.panStarted) {
-                this.emit('modifierpanend', detail);
+                this.emit('pan:mod:end', detail);
                 mod.panStarted = false;
             } else if (
                 this.time() - mod.startTime <= this.options.modifier.maxTapTime &&
@@ -2574,8 +3364,7 @@
             ) {
                 if (this.hasRollingTapCandidate(event)) return;
                 this.session.consumed = true;
-                this.commit('modifiertap', detail, 1);
-                this.emit('modifiertap', detail);
+                this.dispatchCommittedEvents(tapType, detail, 1, [{ type: tapType, detail }]);
             }
         }
 
@@ -2583,18 +3372,18 @@
             const mod = this.session && this.session.keyboardModifier;
             if (!mod || mod.actionId !== id || mod.ended || mod.cancelled) return;
             mod.ended = true;
-            const detail = this.keyboardModifierDetail(mod.panStarted ? 'modifierpanend' : 'modifiertap', event, point);
+            const tapType = 'tap:mod';
+            const detail = this.keyboardModifierDetail(mod.panStarted ? 'pan:mod:end' : tapType, event, point);
 
             if (mod.panStarted) {
-                this.emit('modifierpanend', detail);
+                this.emit('pan:mod:end', detail);
                 mod.panStarted = false;
             } else if (
                 this.time() - mod.startTime <= this.options.modifier.maxTapTime &&
                 detail.actionTravel <= this.options.modifier.maxTapMove
             ) {
                 this.session.consumed = true;
-                this.commit('modifiertap', detail, 1);
-                this.emit('modifiertap', detail);
+                this.dispatchCommittedEvents(tapType, detail, 1, [{ type: tapType, detail }]);
             }
         }
 
@@ -2710,7 +3499,7 @@
                 this.session.consumed = true;
                 this.cancelPress('pan');
                 this.commit('pan', panDetail, panDetail.confidences.pan);
-                this.emit('panstart', panDetail);
+                this.emit('pan:start', panDetail);
             }
 
             const panDetail = this.panDetail(detail, this.session.panAxis);
@@ -2758,6 +3547,7 @@
 
         handlePath(detail) {
             const opt = this.options.path;
+            const consumeMode = this.pathConsumeMode();
             if (!this.allowsGesture('path')) return;
             if (!opt.enabled || !toArray(opt.fingers).includes(detail.fingers)) return;
             if (this.session.pinchStarted || this.session.rotateStarted) return;
@@ -2786,7 +3576,7 @@
                 this.updatePathSegment(last, detail.center, time);
                 path.origin = pointSnapshot(detail.center);
                 path.lastTime = time;
-                this.emitPath(this.pathDetail(detail));
+                this.emitPathWithConsumption(this.pathDetail(detail));
                 return;
             }
 
@@ -2794,18 +3584,34 @@
 
             const segment = this.createPathSegment(direction, path.origin, detail.center, time);
             path.segments.push(segment);
-            while (path.segments.length > Math.max(1, opt.maxSegments || 1)) path.segments.shift();
+            while (path.segments.length > this.pathSegmentLimit()) path.segments.shift();
             path.origin = pointSnapshot(detail.center);
             path.lastTime = time;
 
             const pathDetail = this.pathDetail(detail);
             if (!this.session.pathStarted) {
                 this.session.pathStarted = true;
-                if (opt.consume) this.session.consumed = true;
+                if (consumeMode === 'eager') this.session.consumed = true;
                 this.commit('path', pathDetail, 1);
-                this.emit('pathstart', pathDetail);
+                this.emit('path:start', pathDetail);
+            } else if (consumeMode === 'auto' && path.segments.length > 1) {
+                this.session.consumed = true;
             }
-            this.emitPath(pathDetail);
+            this.emitPathWithConsumption(pathDetail);
+        }
+
+        pathConsumeMode() {
+            return normalizePathConsumeMode(this.options.path && this.options.path.consume);
+        }
+
+        emitPathWithConsumption(detail) {
+            const winner = this.emitPath(detail);
+            this.consumePathWinner(winner);
+            return winner;
+        }
+
+        consumePathWinner(winner) {
+            if (winner && this.pathConsumeMode() === 'auto' && this.session) this.session.consumed = true;
         }
 
         createPathState(detail, origin) {
@@ -2813,7 +3619,10 @@
                 origin: pointSnapshot(origin || detail.startCenter || detail.center),
                 segments: [],
                 lastTime: 0,
-                matched: {}
+                matched: {},
+                observed: {},
+                resolved: [],
+                pending: []
             };
         }
 
@@ -2859,28 +3668,383 @@
         }
 
         emitPath(detail) {
-            this.emit('path', detail);
-            this.emitPathPatterns(detail);
+            const patternItems = this.pathPatternItems(detail);
+            this.emitObservedItems([{ type: 'path', detail }]);
+            return this.resolvePathEvents(detail, patternItems);
         }
 
-        emitPathPatterns(detail) {
+        pathPatternItems(detail) {
             const path = this.session && this.session.path;
-            if (!path || !detail.path || !detail.path.length) return;
+            const items = [];
+            if (!path || !detail.path || !detail.path.length) return items;
 
-            this.listeners.forEach((set, type) => {
-                if (!set || !set.size || !isPathPatternEvent(type)) return;
-                const pattern = pathPatternFromEvent(type);
-                if (!pathMatches(detail.path, pattern)) return;
-                const key = type + '|' + detail.path.length;
+            this.pathPatternRecords().forEach(record => {
+                const match = pathPatternSuffixMatch(detail.path, record.matcher, detail);
+                if (!match) return;
+                const key = this.pathMatchKey(record.type, record.pattern, match.start, match.length, record.record);
                 if (path.matched[key]) return;
-                path.matched[key] = true;
-                this.emit(type, this.pathDetail(detail, { pathMatched: pattern }));
+                const item = {
+                    type: record.type,
+                    pattern: record.pattern,
+                    tokens: match.tokens,
+                    start: match.start,
+                    length: match.length,
+                    key,
+                    record: record.record || null,
+                    detail: this.pathMatchDetail(detail, match, record.type, record.displayPattern || record.pattern)
+                };
+                if (this.pathItemBlockedByResolved(item)) return;
+                items.push(item);
+            });
+            this.circlePatternRecords().forEach(record => {
+                const match = pathPatternSuffixMatch(detail.path, record.matcher, detail);
+                if (!match) return;
+                const key = this.pathMatchKey(record.type, record.pattern, match.start, match.length, record.record);
+                if (path.matched[key]) return;
+                const item = {
+                    type: record.type,
+                    pattern: record.pattern,
+                    tokens: match.tokens,
+                    start: match.start,
+                    length: match.length,
+                    key,
+                    record: record.record || null,
+                    detail: this.pathMatchDetail(detail, match, record.type, record.displayPattern || record.pattern)
+                };
+                if (this.pathItemBlockedByResolved(item)) return;
+                items.push(item);
+            });
+            this.arcPatternRecords().forEach(record => {
+                const match = pathPatternSuffixMatch(detail.path, record.matcher, detail);
+                if (!match) return;
+                const key = this.pathMatchKey(record.type, record.pattern, match.start, match.length, record.record);
+                if (path.matched[key]) return;
+                const item = {
+                    type: record.type,
+                    pattern: record.pattern,
+                    tokens: match.tokens,
+                    start: match.start,
+                    length: match.length,
+                    key,
+                    record: record.record || null,
+                    detail: this.pathMatchDetail(detail, match, record.type, record.displayPattern || record.pattern)
+                };
+                if (this.pathItemBlockedByResolved(item)) return;
+                items.push(item);
+            });
+            return items.filter(item => this.hasPathListener(item));
+        }
+
+        circlePatternRecords() {
+            const records = [];
+            this.listeners.forEach((set, type) => {
+                if (!set || !set.size) return;
+                const parsed = parseEventSelector(type);
+                if (!parsed.valid || parsed.family !== 'circle') return;
+                const matcher = parsePathPattern(parsed.canonical);
+                if (!matcher.valid || !this.pathPatternAllowed(matcher)) return;
+                records.push({
+                    type,
+                    pattern: matcher.canonical,
+                    displayPattern: parsed.canonical,
+                    matcher,
+                    length: matcher.length,
+                    record: null
+                });
+            });
+            return records;
+        }
+
+        arcPatternRecords() {
+            const records = [];
+            this.listeners.forEach((set, type) => {
+                if (!set || !set.size) return;
+                const parsed = parseEventSelector(type);
+                if (!parsed.valid || parsed.family !== 'arc') return;
+                const matcher = parsePathPattern(parsed.canonical);
+                if (!matcher.valid) return;
+                records.push({
+                    type,
+                    pattern: matcher.canonical,
+                    displayPattern: parsed.canonical,
+                    matcher,
+                    length: matcher.length,
+                    record: null
+                });
+            });
+            return records;
+        }
+
+        pathMatchDetail(detail, match, type, displayPattern) {
+            const parsed = parseEventSelector(type);
+            const circle = match.circle || null;
+            const arc = match.arc || null;
+            const isCircleEvent = parsed.valid && parsed.family === 'circle';
+            const isArcEvent = parsed.valid && parsed.family === 'arc';
+            const extra = {
+                pathMatched: isCircleEvent && circle ? circle.pathText : displayPattern || match.pattern,
+                matchPattern: displayPattern || match.pattern,
+                matchedPathText: match.pathText
+            };
+            if (circle) {
+                extra.circleDirection = circle.direction;
+                extra.circleCount = circle.count;
+                extra.circle = {
+                    direction: circle.direction,
+                    count: circle.count,
+                    path: circle.path.slice(),
+                    pathText: circle.pathText,
+                    start: circle.start,
+                    length: circle.length,
+                    startDirection: circle.startDirection,
+                    endDirection: circle.endDirection,
+                    cycles: circle.cycles.map(cycle => Object.assign({}, cycle, {
+                        path: cycle.path.slice()
+                    }))
+                };
+                if (isCircleEvent) extra.direction = circle.direction;
+            }
+            if (arc) {
+                extra.arcDirection = arc.direction;
+                extra.arc = {
+                    direction: arc.direction,
+                    path: arc.path.slice(),
+                    pathText: arc.pathText,
+                    start: arc.start,
+                    length: arc.length,
+                    startDirection: arc.startDirection,
+                    endDirection: arc.endDirection
+                };
+                if (isArcEvent) {
+                    extra.direction = arc.direction;
+                    extra.pathMatched = arc.pathText;
+                }
+            }
+            return this.pathDetail(detail, extra);
+        }
+
+        pathItemBlockedByResolved(item) {
+            const path = this.session && this.session.path;
+            if (!path || !path.resolved || !path.resolved.length) return false;
+            return path.resolved.some(winner => winner.length > item.length);
+        }
+
+        pathMatchKey(type, pattern, start, length, record) {
+            return type + '|' + pattern + '|' + start + '|' + length + '|' + (record ? record.order : '');
+        }
+
+        pathSegmentLimit() {
+            const opt = this.options.path || {};
+            return Math.max(1, opt.maxSegments || 1, this.longestPathPatternLength());
+        }
+
+        pathMaxCircleCount() {
+            const value = Number(this.options.path && this.options.path.maxCircleCount);
+            return value > 0 ? value : Infinity;
+        }
+
+        pathPatternAllowed(pattern) {
+            return pathPatternMaxCircleCount(pattern) <= this.pathMaxCircleCount();
+        }
+
+        longestPathPatternLength() {
+            const pathMax = this.pathPatternRecords().reduce((max, record) => Math.max(max, record.length), 0);
+            const circleMax = this.circlePatternRecords().reduce((max, record) => Math.max(max, record.length), 0);
+            const arcMax = this.arcPatternRecords().reduce((max, record) => Math.max(max, record.length), 0);
+            return Math.max(pathMax, circleMax, arcMax);
+        }
+
+        matchingPathListeners(item) {
+            const set = this.listeners.get(item.type);
+            if (!set) return [];
+            const data = Object.assign({}, item.detail, { type: item.type });
+            return Array.from(set).filter(record => this.listenerMatches(record, data));
+        }
+
+        hasPathListener(item) {
+            if (item.record) {
+                const data = Object.assign({}, item.detail, { type: item.type });
+                return this.listenerMatches(item.record, data, { pathArbitrated: true });
+            }
+            return this.matchingPathListeners(item).length > 0;
+        }
+
+        addPendingPathItems(items) {
+            const path = this.session && this.session.path;
+            if (!path) return [];
+            items.forEach(item => {
+                if (path.matched[item.key] || this.pathItemBlockedByResolved(item) || path.pending.some(pending => pending.key === item.key)) return;
+                path.pending.push(item);
+            });
+            return path.pending.slice();
+        }
+
+        pathPatternRecords() {
+            const patterns = [];
+            this.listeners.forEach((set, type) => {
+                if (!set || !set.size) return;
+                if (isPathPatternEvent(type)) {
+                    const pattern = pathPatternFromEvent(type);
+                    const matcher = parsePathPattern(pattern);
+                    if (matcher.valid && this.pathPatternAllowed(matcher)) patterns.push({ type, pattern: matcher.canonical, displayPattern: pattern, matcher, length: matcher.length, record: null });
+                    return;
+                }
+                if (type !== 'path') return;
+                Array.from(set).forEach(record => {
+                    this.pathCriteriaPatterns(record.criteria).forEach(item => {
+                        patterns.push({ type, pattern: item.matcher.canonical, displayPattern: item.displayPattern, matcher: item.matcher, length: item.matcher.length, record });
+                    });
+                });
+            });
+            return patterns;
+        }
+
+        pathCriteriaPatterns(criteria) {
+            if (!criteria || !isPlainObject(criteria)) return [];
+            const values = [];
+            if (criteria.path !== undefined && criteria.path !== null) values.push(criteria.path);
+            if (criteria.pathText !== undefined && criteria.pathText !== null) values.push(criteria.pathText);
+            const out = [];
+            const seen = {};
+            values.forEach(value => {
+                const items = isPathPatternTokenArray(value) ? [value] : toArray(value);
+                items.forEach(item => {
+                    const displayPattern = pathPatternText(item);
+                    const matcher = parsePathPattern(displayPattern);
+                    const key = displayPattern;
+                    if (!matcher.valid || !this.pathPatternAllowed(matcher) || seen[key]) return;
+                    seen[key] = true;
+                    out.push({ pattern: matcher.canonical, displayPattern, matcher });
+                });
+            });
+            return out;
+        }
+
+        pathContinuationRecords() {
+            return this.pathPatternRecords().concat(this.circlePatternRecords(), this.arcPatternRecords());
+        }
+
+        pendingPathCanContinue(item, currentPath, patterns, detail) {
+            if (!item.tokens.every((token, index) => currentPath[item.start + index] === token)) return false;
+            const progress = currentPath.slice(item.start);
+            return patterns.some(pattern => (
+                pattern.length > progress.length &&
+                pathPatternProgressMatches(pattern.matcher, progress, detail)
+            ));
+        }
+
+        resolvePathEvents(detail, patternItems) {
+            const path = this.session && this.session.path;
+            if (!path) return null;
+            const pending = this.addPendingPathItems(patternItems);
+            const patterns = this.pathContinuationRecords();
+            const ready = [];
+
+            path.pending = pending.filter(item => {
+                if (path.matched[item.key]) return false;
+                if (this.pendingPathCanContinue(item, detail.path, patterns, detail)) return true;
+                ready.push(item);
+                return false;
+            });
+
+            return this.emitReadyPathItems(detail, ready);
+        }
+
+        flushPathEvents(detail) {
+            const path = this.session && this.session.path;
+            if (!path || !path.pending.length) return null;
+            const pending = path.pending.slice();
+            path.pending = [];
+            return this.emitReadyPathItems(detail, pending, true);
+        }
+
+        emitReadyPathItems(detail, items, omitPathCommand) {
+            const path = this.session && this.session.path;
+            if (!path) return null;
+            const winners = this.pathExclusiveWinners(items || []);
+            const fresh = winners.filter(item => !path.observed[item.key]);
+            fresh.forEach(item => {
+                path.observed[item.key] = true;
+            });
+            this.emitPathObservedItems(fresh);
+            const commandItems = omitPathCommand ? winners : [{ type: 'path', detail }].concat(winners);
+            const winner = this.emitCommandWinner(commandItems);
+            this.markPathWinners(winners);
+            return winner;
+        }
+
+        emitPathObservedItems(items) {
+            (items || []).forEach(item => {
+                if (item.record) {
+                    this.emitPathRecord(item.record, item.type, item.detail, ['observe', 'intent', 'update']);
+                    return;
+                }
+                this.emit(item.type, item.detail, { phases: ['observe', 'intent', 'update'] });
+            });
+        }
+
+        emitPathRecord(record, type, detail, phases) {
+            const data = Object.assign({}, detail || {}, { type });
+            Object.defineProperty(data, 'instance', {
+                value: this,
+                enumerable: false,
+                configurable: true
+            });
+            if (this.listenerMatches(record, data, { phases, pathArbitrated: true })) this.runListenerRecord(record, data);
+            return data;
+        }
+
+        pathExclusiveWinners(items) {
+            const sorted = (items || []).slice().sort((a, b) => (
+                b.length - a.length ||
+                this.eventSpecificity(b.type, b.detail) - this.eventSpecificity(a.type, a.detail) ||
+                this.pathItemOrder(a) - this.pathItemOrder(b) ||
+                a.start - b.start
+            ));
+            const winners = [];
+            sorted.forEach(item => {
+                if (winners.some(winner => this.pathItemsConflict(item, winner))) return;
+                winners.push(item);
+            });
+            return winners.sort((a, b) => a.start - b.start || b.length - a.length);
+        }
+
+        pathItemOrder(item) {
+            return this.matchingPathListeners(item).reduce((order, record) => Math.min(order, record.order), Infinity);
+        }
+
+        pathItemsOverlap(a, b) {
+            return a.start < b.start + b.length && a.start + a.length > b.start;
+        }
+
+        pathItemsSameMatch(a, b) {
+            return a.start === b.start && a.length === b.length && a.pattern === b.pattern;
+        }
+
+        pathItemsConflict(a, b) {
+            return !this.pathItemsSameMatch(a, b) && this.pathItemsOverlap(a, b);
+        }
+
+        markPathWinners(items) {
+            const path = this.session && this.session.path;
+            if (!path || !items || !items.length) return;
+            items.forEach(item => {
+                path.matched[item.key] = true;
+                path.resolved.push({
+                    start: item.start,
+                    length: item.length
+                });
+            });
+            path.pending = path.pending.filter(item => {
+                return !items.some(winner => this.pathItemsOverlap(item, winner)) && !this.pathItemBlockedByResolved(item);
             });
         }
 
         emitPathEnd(detail) {
             const pathDetail = this.pathDetail(detail);
-            this.emit('pathend', pathDetail);
+            const winner = !pathDetail.reason || pathDetail.reason === 'pause' ? this.flushPathEvents(pathDetail) : null;
+            this.consumePathWinner(winner);
+            this.emit('path:end', pathDetail);
             if (this.session) {
                 this.session.pathStarted = false;
                 this.session.path = null;
@@ -2891,7 +4055,7 @@
             const opt = this.options.pinch;
             if (this.session.modifier && this.session.modifier.panStarted) return;
             if (!this.allowsGesture('pinch')) return;
-            if (!opt.enabled || detail.fingers !== opt.fingers || !detail.distance || this.session.panStarted) return;
+            if (!opt.enabled || detail.fingers !== 2 || !detail.distance || this.session.panStarted) return;
 
             const distanceDelta = abs(detail.distance - detail.startDistance);
             const scaleDelta = abs(detail.scale - 1);
@@ -2903,40 +4067,70 @@
                 if (distanceDelta <= detail.travel * opt.dominance) return;
                 this.session.pinchStarted = true;
                 this.session.pinchBaseDistance = detail.distance || 0;
+                this.session.pinchModified = this.isModifiedGesture(detail);
                 this.session.consumed = true;
                 this.cancelPress('pinch');
                 detail = this.rebasedTransformDetail(detail);
-                this.commit('pinch', detail, detail.confidences.pinch);
-                this.emit('pinchstart', detail);
+                detail = Object.assign({}, detail, { modified: this.session.pinchModified });
+                this.commit(this.transformCommitType('pinch', this.pinchDirection(detail), detail), detail, detail.confidences.pinch);
+                this.emit('pinch:start', detail);
+                if (this.session.pinchModified) this.emit('pinch:mod:start', detail);
             }
 
             detail = this.rebasedTransformDetail(detail);
             this.claim(detail, detail.confidences.pinch);
-            this.emit('pinch', detail);
-            this.emit(detail.scale >= 1 ? 'pinchout' : 'pinchin', detail);
+            this.emitDirectEmits(this.transformEvents('pinch', this.pinchDirection(detail), detail));
         }
 
         handleRotate(detail) {
             const opt = this.options.rotate;
             if (this.session.modifier && this.session.modifier.panStarted) return;
             if (!this.allowsGesture('rotate')) return;
-            if (!opt.enabled || detail.fingers !== opt.fingers || this.session.panStarted) return;
+            if (!opt.enabled || detail.fingers !== 2 || this.session.panStarted) return;
 
             if (!this.session.rotateStarted) {
                 if (detail.confidences.rotate < opt.confidence) return;
                 this.session.rotateStarted = true;
                 this.session.rotateBaseAngle = detail.angle;
+                this.session.rotateModified = this.isModifiedGesture(detail);
                 this.session.consumed = true;
                 this.cancelPress('rotate');
                 detail = this.rebasedTransformDetail(detail);
-                this.commit('rotate', detail, detail.confidences.rotate);
-                this.emit('rotatestart', detail);
+                detail = Object.assign({}, detail, { modified: this.session.rotateModified });
+                this.commit(this.transformCommitType('rotate', this.rotateDirection(detail), detail), detail, detail.confidences.rotate);
+                this.emit('rotate:start', detail);
+                if (this.session.rotateModified) this.emit('rotate:mod:start', detail);
             }
 
             detail = this.rebasedTransformDetail(detail);
             this.claim(detail, detail.confidences.rotate);
-            this.emit('rotate', detail);
-            this.emit((detail.rawRotation !== undefined ? detail.rawRotation : detail.rotation) >= 0 ? 'rotateclockwise' : 'rotatecounterclockwise', detail);
+            this.emitDirectEmits(this.transformEvents('rotate', this.rotateDirection(detail), detail));
+        }
+
+        pinchDirection(detail) {
+            return detail.scale >= 1 ? 'out' : 'in';
+        }
+
+        rotateDirection(detail) {
+            return (detail.rawRotation !== undefined ? detail.rawRotation : detail.rotation) >= 0 ? 'cw' : 'ccw';
+        }
+
+        transformEvents(family, direction, detail) {
+            const modified = this.isModifiedGesture(detail);
+            const data = Object.assign({}, detail, { modified });
+            const events = [
+                { type: family, detail: data },
+                { type: family + ':' + direction, detail: data }
+            ];
+            if (modified) {
+                events.push({ type: family + ':mod', detail: data });
+                events.push({ type: family + ':mod:' + direction, detail: data });
+            }
+            return events;
+        }
+
+        transformCommitType(family, direction, detail) {
+            return family + (this.isModifiedGesture(detail) ? ':mod' : '') + ':' + direction;
         }
 
         handleSwipeIntent(detail) {
@@ -2947,18 +4141,55 @@
             if (!this.intentReady(detail, opt, 'swipe')) return;
             if (!this.session.swipeIntentAt) {
                 this.session.swipeIntentAt = this.time();
-                this.emit('swipeintent', detail);
+                this.emit('swipe:intent', detail);
+                if (detail.direction !== 'none') this.emit('swipe:intent:' + detail.direction, detail);
                 return;
             }
             if (this.time() - this.session.swipeIntentAt >= opt.confidenceDelay) this.session.swipeReady = true;
         }
 
+        pushSwipeTypes(out, base, detail) {
+            const direction = detail.direction !== 'none' ? detail.direction : '';
+            out.push(base);
+            if (direction) out.push(base + ':' + direction);
+        }
+
+        isModifiedGesture(detail) {
+            if (detail.modifier) return true;
+            if (!detail.keyCombo) return false;
+            const substitute = detail.keyboardSubstitute;
+            if (!substitute || !substitute.keys) return true;
+            return detail.keys.some(key => !substitute.keys.includes(key));
+        }
+
+        swipeEvents(detail) {
+            detail = Object.assign({}, detail, {
+                speed: this.swipeSpeed(detail),
+                modified: this.isModifiedGesture(detail)
+            });
+            const types = [];
+            this.pushSwipeTypes(types, 'swipe', detail);
+            if (detail.modified) this.pushSwipeTypes(types, 'swipe:mod', detail);
+            return types.map(type => ({ type, detail }));
+        }
+
+        swipeSpeed(detail) {
+            const velocity = detail.velocity || 0;
+            const threshold = Math.max(0.001, this.options.swipe.velocity || 0.001);
+            if (velocity >= threshold * 2) return 'flick';
+            if (velocity >= threshold) return 'normal';
+            return 'slow';
+        }
+
+        swipeCommitType(detail) {
+            const direction = detail.direction !== 'none' ? detail.direction : '';
+            return 'swipe' + (detail.modified ? ':mod' : '') + (direction ? ':' + direction : '');
+        }
+
         emitSwipe(detail) {
             this.session.consumed = true;
-            const events = [{ type: 'swipe', detail }];
-            if (detail.direction !== 'none') events.push({ type: 'swipe' + detail.direction, detail });
-            if (detail.velocity >= this.options.swipe.velocity * 2) events.push({ type: 'flick', detail });
-            this.dispatchCommittedEvents('swipe', detail, detail.confidences.swipe, events);
+            const events = this.swipeEvents(detail);
+            this.dispatchCommittedEvents(this.swipeCommitType(events[0].detail), events[0].detail, detail.confidences.swipe, events);
         }
 
         keyboardRollingRole(detail) {
@@ -3120,11 +4351,9 @@
         }
 
         rollingEvents(rolling, detail) {
-            const countAlias = rolling.count + 'fingerrollingtap';
             return [
-                { type: 'rollingtap', detail },
-                { type: 'rollingtap' + rolling.direction, detail },
-                { type: countAlias, detail }
+                { type: 'rolling', detail },
+                { type: 'rolling:' + rolling.direction, detail }
             ];
         }
 
@@ -3162,7 +4391,7 @@
             this.session.maxFingers = Math.max(this.session.maxFingers || 0, rolling.count);
             this.session.consumed = true;
             const events = this.rollingEvents(rolling, rollingDetail);
-            this.dispatchCommittedEvents('rollingtap', rollingDetail, 1, events, rolling.possible ? this.keyboardRollingWindow() : undefined);
+            this.dispatchCommittedEvents('rolling:' + rolling.direction, rollingDetail, 1, events, rolling.possible ? this.keyboardRollingWindow() : undefined);
             return true;
         }
 
@@ -3176,22 +4405,21 @@
             });
             const keyboardRolling = this.keyboardRollingTapData(tapDetail, sequence);
 
+            if (count > 1) this.clearPendingEmits();
+
             if (keyboardRolling && keyboardRolling.ready) {
                 this.emitKeyboardRollingTap(tapDetail, keyboardRolling);
                 this.rememberLastTap(detail);
                 return;
             }
 
-            const countAlias = detail.fingers + 'finger' + (count === 1 ? 'tap' : count === 2 ? 'doubletap' : count === 3 ? 'tripletap' : count + 'tap');
+            const countType = 'tap:' + count + 'x';
             const events = [
                 { type: 'tap', detail: tapDetail },
-                { type: 'tapsequence', detail: tapDetail }
+                { type: countType, detail: tapDetail },
+                { type: 'tap:sequence', detail: tapDetail }
             ];
-            if (count > 1) events.push({ type: 'multitap', detail: tapDetail });
-            events.push({ type: count === 2 ? 'doubletap' : count === 3 ? 'tripletap' : 'singletap', detail: tapDetail });
-            const fingerAlias = detail.fingers + 'fingertap';
-            events.push({ type: countAlias, detail: tapDetail });
-            if (fingerAlias !== countAlias) events.push({ type: fingerAlias, detail: tapDetail });
+            if (count > 1) events.push({ type: 'tap:multi', detail: tapDetail });
 
             if (keyboardRolling && keyboardRolling.possible) {
                 this.queueDirectEmits(events, this.keyboardRollingWindow());
@@ -3199,15 +4427,34 @@
                 return;
             }
 
-            const sequenceState = this.commit(countAlias, tapDetail, 1);
+            const sequenceState = this.commit(countType, tapDetail, 1);
             if (sequenceState.matched) {
                 this.rememberLastTap(detail);
                 return;
             }
-            if (sequenceState.possible) this.queueDirectEmits(events);
+            if (sequenceState.possible || this.hasCompetingTapCommand(count)) this.queueDirectEmits(events, this.options.tap.interval);
             else this.emitDirectEmits(events);
 
             this.rememberLastTap(detail);
+        }
+
+        hasCompetingTapCommand(count) {
+            let found = false;
+            this.listeners.forEach((set, type) => {
+                if (found || !set || !set.size) return;
+                const hasCommand = Array.from(set).some(record => record.phase === 'command');
+                if (!hasCommand) return;
+                if (isSequencePatternEvent(type)) {
+                    const pattern = sequencePattern(type);
+                    if (pattern.some(matcher => matcher.family === 'tap' && matcher.mode !== 'mod' && (pattern.length > 1 || matcher.tapCount === null || matcher.tapCount > count))) found = true;
+                    return;
+                }
+                const parsed = parseEventSelector(type);
+                if (!parsed.valid || parsed.family !== 'tap' || parsed.mode === 'mod') return;
+                if (parsed.mode === 'multi' && count < 2) found = true;
+                if (parsed.count !== null && count < parsed.count) found = true;
+            });
+            return found;
         }
 
         rememberLastTap(detail) {
@@ -3435,7 +4682,7 @@
             });
             if (this.options.rolling.consumesTap !== false) this.session.consumed = true;
             const events = this.rollingEvents(rolling, rollingDetail);
-            this.dispatchCommittedEvents('rollingtap', rollingDetail, 1, events);
+            this.dispatchCommittedEvents('rolling:' + rolling.direction, rollingDetail, 1, events);
             return true;
         }
 
@@ -3463,9 +4710,9 @@
                 if (!this.session || this.session.moved || this.session.consumed) return;
                 this.session.pressStarted = true;
                 if (opt.consumesTap !== false) this.session.consumed = true;
-                const detail = this.detail('pressstart', { originalEvent: event });
+                const detail = this.detail('press:start', { originalEvent: event });
                 this.commit('press', detail, 1);
-                this.emit('pressstart', detail);
+                this.emit('press:start', detail);
                 this.emit('press', detail);
 
                 if (opt.repeat > 0) {
@@ -3486,7 +4733,7 @@
             this.session.pressRepeatTimer = null;
 
             if (this.session.pressStarted) {
-                const type = ended ? 'pressend' : 'presscancel';
+                const type = ended ? 'press:end' : 'press:cancel';
                 this.emit(type, this.detail(type, { reason }));
             }
 
@@ -3521,8 +4768,10 @@
             this.session.maxActualFingers = Math.max(this.session.maxActualFingers || 0, points.length);
             this.session.pinchStarted = false;
             this.session.pinchBaseDistance = null;
+            this.session.pinchModified = false;
             this.session.rotateStarted = false;
             this.session.rotateBaseAngle = null;
+            this.session.rotateModified = false;
             this.session.pathStarted = false;
             this.session.path = null;
             this.session.swipeIntentAt = 0;
@@ -3754,12 +5003,12 @@
         }
 
         phaseFor(type) {
-            if (type === 'cancel' || type.endsWith('cancel')) return 'cancelled';
-            if (type === 'end' || type.endsWith('end')) return 'ended';
+            if (type === 'session:cancel' || type.endsWith('cancel') || type.endsWith(':cancel')) return 'cancelled';
+            if (type === 'session:end' || type.endsWith('end') || type.endsWith(':end')) return 'ended';
             if (type === 'finish') return 'settling';
-            if (type.endsWith('start')) return 'began';
-            if (type === 'tap' || type === 'swipe' || type === 'rollingtap' || type === 'modifiertap') return 'committed';
-            if (type === 'move' || type.endsWith('move') || type === 'pan' || type === 'pinch' || type === 'rotate') return 'active';
+            if (type.endsWith('start') || type.endsWith(':start')) return 'began';
+            if (type === 'tap' || type === 'swipe' || type === 'rolling' || type === 'tap:mod' || type.indexOf('tap:') === 0 || type.indexOf('rolling:') === 0 || type.indexOf('swipe:') === 0) return 'committed';
+            if (type === 'session:move' || type.endsWith('move') || type.endsWith(':move') || type === 'pan' || type === 'pan:mod' || type === 'pinch' || type === 'rotate') return 'active';
             return 'possible';
         }
 
@@ -3811,13 +5060,13 @@
             const swipeOpt = this.options.swipe;
             const swipeMin = swipeOpt.distanceByFingers[detail.fingers] || swipeOpt.distance || 1;
             const pan = this.allowsGesture('pan') && panOpt.enabled && toArray(panOpt.fingers).includes(detail.fingers) && this.intentReady(detail, panOpt, 'pan') ? detail.travel / Math.max(1, panOpt.threshold) : 0;
-            const pinchReady = this.allowsGesture('pinch') && pinchOpt.enabled && detail.fingers === pinchOpt.fingers && this.intentReady(detail, pinchOpt, 'pinch');
+            const pinchReady = this.allowsGesture('pinch') && pinchOpt.enabled && detail.fingers === 2 && this.intentReady(detail, pinchOpt, 'pinch');
             const pinchDistance = pinchReady ? abs(detail.distanceDelta) / Math.max(1, pinchOpt.distance) : 0;
             const pinchScale = pinchReady ? abs(detail.scaleDelta) / Math.max(0.001, pinchOpt.scale) : 0;
             const pinchDominance = pinchReady && detail.travel ? abs(detail.distanceDelta) / Math.max(1, detail.travel * pinchOpt.dominance) : Math.max(pinchDistance, pinchScale);
             let rotate = 0;
 
-            if (this.allowsGesture('rotate') && rotateOpt.enabled && detail.fingers === rotateOpt.fingers && this.intentReady(detail, rotateOpt, 'rotate')) {
+            if (this.allowsGesture('rotate') && rotateOpt.enabled && detail.fingers === 2 && this.intentReady(detail, rotateOpt, 'rotate')) {
                 const angleScore = abs(detail.rotation) / Math.max(1, rotateOpt.angle);
                 const speedScore = detail.angularVelocity / Math.max(0.001, rotateOpt.minAngularVelocity);
                 const late = detail.elapsed > rotateOpt.maxSoftStart && abs(detail.rotation) < rotateOpt.lateAngle;
@@ -3998,11 +5247,109 @@
         }
     }
 
-    HandTrick.version = '1.0.0';
+    const criteriaKeys = listSet([
+        'region',
+        'startRegion',
+        'tapStartRegion',
+        'grid',
+        'startGrid',
+        'tapStartGrid',
+        'sequenceStartGrid',
+        'sequence',
+        'area',
+        'startArea',
+        'tapStartArea',
+        'edge',
+        'modifierRegion',
+        'modifierArea',
+        'modifierSource',
+        'modifierName',
+        'modifierFingers',
+        'actionFingers',
+        'totalFingers',
+        'key',
+        'keys',
+        'combo',
+        'modifierKeys',
+        'direction',
+        'axis',
+        'speed',
+        'modified',
+        'path',
+        'pathText',
+        'fingers',
+        'actualFingers',
+        'syntheticFingers',
+        'fingerSource',
+        'keyboardRole',
+        'pointerType',
+        'tapCount'
+    ]);
+
+    const sequenceCriteriaKeys = listSet(['start', 'end', 'steps']);
+    const sequenceStepCriteriaKeys = listSet([
+        'event',
+        'gesture',
+        'family',
+        'mode',
+        'state',
+        'direction',
+        'fingers',
+        'actualFingers',
+        'syntheticFingers',
+        'fingerSource',
+        'keyboardRole',
+        'keys',
+        'combo',
+        'tapCount',
+        'region',
+        'grid',
+        'area'
+    ]);
+
+    function criteriaKeysKnown(criteria, allowed) {
+        if (!isPlainObject(criteria)) return false;
+        return Object.keys(criteria).every(key => allowed[key]);
+    }
+
+    function sequenceCriteriaMatches(event, expected) {
+        const gestures = event && event.gestureSequence && event.gestureSequence.gestures;
+        if (!gestures || !gestures.length) return false;
+        if (Array.isArray(expected)) return expected.length > 0 && expected.every((criteria, index) => sequenceStepCriteriaMatches(gestures[index], criteria));
+        if (!criteriaKeysKnown(expected, sequenceCriteriaKeys)) return false;
+        if (expected.start && !sequenceStepCriteriaMatches(gestures[0], expected.start)) return false;
+        if (expected.end && !sequenceStepCriteriaMatches(gestures[gestures.length - 1], expected.end)) return false;
+        if (expected.steps !== undefined && !sequenceCriteriaMatches(event, expected.steps)) return false;
+        return !!(expected.start || expected.end || expected.steps !== undefined);
+    }
+
+    function sequenceStepCriteriaMatches(step, criteria) {
+        if (criteria === undefined || criteria === null) return true;
+        if (!step || !criteriaKeysKnown(criteria, sequenceStepCriteriaKeys)) return false;
+        if (criteria.event && !matchValue(step.event, criteria.event)) return false;
+        if (criteria.gesture && !matchValue(step.gesture, criteria.gesture)) return false;
+        if (criteria.family && !matchValue(step.family, criteria.family)) return false;
+        if (criteria.mode && !matchValue(step.mode, criteria.mode)) return false;
+        if (criteria.state && !matchValue(step.state, criteria.state)) return false;
+        if (criteria.direction && !matchValue(step.direction, criteria.direction)) return false;
+        if (criteria.fingers !== undefined && !matchValue(step.fingers, criteria.fingers)) return false;
+        if (criteria.actualFingers !== undefined && !matchValue(step.actualFingers, criteria.actualFingers)) return false;
+        if (criteria.syntheticFingers !== undefined && !matchValue(step.syntheticFingers, criteria.syntheticFingers)) return false;
+        if (criteria.fingerSource !== undefined && criteria.fingerSource !== null && !matchFingerSource(step.fingerSource, criteria.fingerSource)) return false;
+        if (criteria.keyboardRole && !matchValue(step.keyboardRole, criteria.keyboardRole)) return false;
+        if (criteria.keys && !matchCombo(step.keyCombo, criteria.keys)) return false;
+        if (criteria.combo && !matchCombo(step.keyCombo, criteria.combo)) return false;
+        if (criteria.tapCount !== undefined && !matchValue(step.tapCount, criteria.tapCount)) return false;
+        if (criteria.region && !HandTrick.region(step.center, criteria.region)) return false;
+        if (criteria.grid && !gridMatches(step.center, criteria.grid)) return false;
+        if (criteria.area && !matchValue(step.center && step.center.area, criteria.area)) return false;
+        return true;
+    }
+
     HandTrick.events = eventNames.slice();
-    HandTrick.gestures = Object.keys(eventRegistry).filter(group => group !== 'lifecycle' && group !== 'pressure');
+    HandTrick.recognizers = recognizerNames.slice();
+    HandTrick.families = Object.keys(eventRegistry).filter(group => group !== 'lifecycle');
     HandTrick.groups = merge(eventRegistry);
-    HandTrick.aliases = merge(eventAliases);
     HandTrick.region = function (event, region) {
         const point = event && event.center ? event.center : event;
         if (!point) return false;
@@ -4018,33 +5365,49 @@
         return gridFor(point, options);
     };
     HandTrick.path = function (value) {
-        return pathText(value);
+        return pathPatternText(value);
     };
     HandTrick.matches = function (event, criteria) {
-        const opt = criteria || {};
         if (!event) return false;
+        if (criteria === undefined || criteria === null) return true;
+        if (!criteriaKeysKnown(criteria, criteriaKeys)) return false;
+        const opt = criteria;
         const modifier = event.modifier || null;
         const modifierPoint = modifier && modifier.position ? modifier.position.source : null;
+        const tapStart = tapStartPoint(event);
+        const sequenceStart = event && event.gestureSequence && event.gestureSequence.gestures[0];
         if (opt.region && !HandTrick.region(event, opt.region)) return false;
         if (opt.startRegion && !HandTrick.region(event && event.startCenter, opt.startRegion)) return false;
+        if (opt.tapStartRegion && !HandTrick.region(tapStart, opt.tapStartRegion)) return false;
+        if (opt.grid && !gridMatches(event && event.center, opt.grid)) return false;
+        if (opt.startGrid && !gridMatches(event && event.startCenter, opt.startGrid)) return false;
+        if (opt.tapStartGrid && !gridMatches(tapStart, opt.tapStartGrid)) return false;
+        if (opt.sequenceStartGrid && !gridMatches(sequenceStart && sequenceStart.center, opt.sequenceStartGrid)) return false;
+        if (opt.sequence && !sequenceCriteriaMatches(event, opt.sequence)) return false;
         if (opt.area && !matchValue(event.area, opt.area)) return false;
         if (opt.startArea && !matchValue(event.startArea, opt.startArea)) return false;
+        if (opt.tapStartArea && !matchValue(tapStart && tapStart.area, opt.tapStartArea)) return false;
         if (opt.modifierRegion && !HandTrick.region(modifierPoint, opt.modifierRegion)) return false;
         if (opt.modifierArea && !matchValue(modifier && modifier.area, opt.modifierArea)) return false;
         if (opt.modifierSource && !matchValue(modifier && modifier.source, opt.modifierSource)) return false;
         if (opt.modifierName && !matchValue(modifier && modifier.name, opt.modifierName)) return false;
+        if (opt.modifierFingers !== undefined && !matchValue(modifier && modifier.fingers, opt.modifierFingers)) return false;
+        if (opt.actionFingers !== undefined && !matchValue(modifier && modifier.actionFingers, opt.actionFingers)) return false;
+        if (opt.totalFingers !== undefined && !matchValue(modifier && modifier.totalFingers, opt.totalFingers)) return false;
         if (opt.key && !toArray(opt.key).every(key => (event.keys || []).includes(canonicalKey(key)))) return false;
         if (opt.keys && !matchCombo(event.keyCombo, opt.keys)) return false;
         if (opt.combo && !matchCombo(event.keyCombo, opt.combo)) return false;
         if (opt.modifierKeys && !matchCombo(modifier && modifier.keyCombo, opt.modifierKeys)) return false;
         if (opt.direction && !matchValue(event.direction, opt.direction)) return false;
         if (opt.axis && !matchValue(event.axis, opt.axis)) return false;
-        if (opt.path && !pathMatches(event.path || event.pathText, opt.path)) return false;
-        if (opt.pathText && !pathMatches(event.path || event.pathText, opt.pathText)) return false;
+        if (opt.speed && !matchValue(event.speed, opt.speed)) return false;
+        if (opt.modified !== undefined && !!event.modified !== !!opt.modified) return false;
+        if (opt.path && !pathMatches(event.path || event.pathText, opt.path, event)) return false;
+        if (opt.pathText && !pathMatches(event.path || event.pathText, opt.pathText, event)) return false;
         if (opt.fingers !== undefined && !matchValue(event.fingers, opt.fingers)) return false;
         if (opt.actualFingers !== undefined && !matchValue(event.actualFingers, opt.actualFingers)) return false;
         if (opt.syntheticFingers !== undefined && !matchValue(event.syntheticFingers, opt.syntheticFingers)) return false;
-        if (opt.fingerSource && !matchValue(event.fingerSource, opt.fingerSource)) return false;
+        if (opt.fingerSource !== undefined && opt.fingerSource !== null && !matchFingerSource(event.fingerSource, opt.fingerSource)) return false;
         if (opt.keyboardRole && !matchValue(event.keyboardSubstitute && event.keyboardSubstitute.role, opt.keyboardRole)) return false;
         if (opt.pointerType && !matchValue(event.pointerType, opt.pointerType)) return false;
         if (opt.tapCount !== undefined && !matchValue(event.tapCount, opt.tapCount)) return false;
@@ -4053,5 +5416,18 @@
     };
     HandTrick.presets = presetRegistry;
     HandTrick.keyCombo = normalizeCombo;
+    HandTrick.event = function (value) {
+        const key = canonicalEventType(value);
+        if (key === '*') return '*';
+        const path = pathPatternFromEvent(key);
+        if (path) return path;
+        const sequence = parseSequenceSelector(key);
+        if (sequence.valid) return sequence.canonical;
+        const parsed = parseEventSelector(key);
+        return parsed.valid ? parsed.canonical : '';
+    };
+    HandTrick.isEvent = function (value) {
+        return !!HandTrick.event(value);
+    };
     return HandTrick;
 });

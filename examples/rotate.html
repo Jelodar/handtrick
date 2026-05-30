@@ -15,7 +15,7 @@
 <body>
 <main id="surface">
     <div id="box">ROTATE</div>
-    <div id="readout">rotation=0</div>
+    <div id="readout">rotation=0; twist deliberately, pan-like motion is rejected</div>
 </main>
 <script src="../handtrick.js"></script>
 <script>
@@ -32,7 +32,7 @@ const hand = new HandTrick(surface, ['map', {
     rotate: { angle: 6, minTime: 70, minSamples: 2, dominance: 0.36, confidence: 0.62 }
 }]);
 
-hand.on('rotatestart', () => {
+hand.on('rotate:start', () => {
     startRotation = rotation;
 });
 hand.on('rotate', event => {

@@ -22,20 +22,22 @@
 <body>
 <main>
     <h1>HANDTRICK EXAMPLES</h1>
-    <p>Start at Basic, then move toward richer routing, keyboard roles, conflict boundaries, threshold tuning, and the full workbench.</p>
+    <p>Start at Basic, then move toward routing, keyboard roles, conflict boundaries, threshold tuning, and the full workbench. Each page isolates one rule that otherwise tends to get misdiagnosed in app code.</p>
     <div class="grid">
-        <a href="./basic.html"><b>01 BASIC</b><span>Tap, swipe, region, fingers. Smallest useful surface.</span><code>new HandTrick(surface)</code></a>
-        <a href="./media.html"><b>02 MEDIA</b><span>One-line media preset, tap zones, swipe, pinch zoom.</span><code>new HandTrick(surface, 'media')</code></a>
-        <a href="./regions.html"><b>03 REGIONS</b><span>3x3 zones, halves, custom grid cells, start-region routing.</span><code>hand.on('tap', { region })</code></a>
-        <a href="./keyboard.html"><b>04 KEYBOARD</b><span>Alt/Ctrl fingers, Meta rolling, Shift modifier drag.</span><code>fingerSource: 'keyboard'</code></a>
-        <a href="./rolling.html"><b>05 ROLLING</b><span>Rolling tap versus simultaneous multi-touch.</span><code>rollingtap</code></a>
-        <a href="./sequences.html"><b>06 SEQUENCES</b><span>Exclusive tap chains and two-finger keyboard sequences.</span><code>tap&gt;tap&gt;swipe</code></a>
-        <a href="./path.html"><b>07 PATH</b><span>Held-pointer L-shapes and bare path definitions.</span><code>left&gt;down</code></a>
-        <a href="./rotate.html"><b>08 ROTATE</b><span>Continuous two-finger rotation with rebased angle output.</span><code>event.rotation</code></a>
-        <a href="./wheel.html"><b>09 WHEEL</b><span>Wheel zoom with normalized pixel, line, and page deltas.</span><code>wheelzoom</code></a>
-        <a href="./thresholds.html"><b>10 THRESHOLDS</b><span>Live tap, swipe, pinch, rotate, and path threshold tuning.</span><code>hand.setOptions(...)</code></a>
-        <a href="./advanced.html"><b>11 ADVANCED</b><span>Combined modifier, rolling, path, wheel, rotate, region, and sequence routing.</span><code>map + criteria</code></a>
-        <a href="../inspector/index.html"><b>12 WORKBENCH</b><span>Full event stream, payload inspection, event toggles, and live tuning.</span><code>HandTrick.groups</code></a>
+        <a href="./basic.html"><b>01 BASIC</b><span>Smallest surface: command winners, regions, finger source, pinch, rotate.</span><code>new HandTrick(surface)</code></a>
+        <a href="./media.html"><b>02 MEDIA</b><span>Media preset plus listener-derived activation; no manual intent list needed.</span><code>new HandTrick(surface, 'media')</code></a>
+        <a href="./regions.html"><b>03 REGIONS</b><span>Current region, start region, halves, and custom grid cells.</span><code>hand.on('tap', { region })</code></a>
+        <a href="./keyboard.html"><b>04 KEYBOARD</b><span>Effective fingers from Alt/Ctrl/Shift+Meta; filter source only when needed.</span><code>fingerSource: 'auto'</code></a>
+        <a href="./module.html"><b>05 MODULE</b><span>Use .mjs in module scripts; use minified .mjs for direct CDN modules.</span><code>../handtrick.mjs</code></a>
+        <a href="./rolling.html"><b>06 ROLLING</b><span>Stagger plus overlap becomes rolling; simultaneous contacts stay taps.</span><code>rolling</code></a>
+        <a href="./sequences.html"><b>07 SEQUENCES</b><span>Long sequence suppresses direct tap/swipe fallbacks during its window.</span><code>tap&gt;tap&gt;swipe</code></a>
+        <a href="./path.html"><b>08 PATH</b><span>Bare held paths, two-finger criteria, circle and arc direction, longer-path precedence.</span><code>arc:up</code></a>
+        <a href="./rotate.html"><b>09 ROTATE</b><span>Rebased rotation delta versus accumulated app rotation.</span><code>event.rotation</code></a>
+        <a href="./wheel.html"><b>10 WHEEL</b><span>Normalized wheel zoom and why wheel prevention is opt-in.</span><code>wheel:zoom</code></a>
+        <a href="./thresholds.html"><b>11 THRESHOLDS</b><span>Adjust one proof at a time; distance before velocity.</span><code>hand.setOptions(...)</code></a>
+        <a href="./router.html"><b>12 ROUTER</b><span>Switch command, on, observe, selector, and criteria at runtime.</span><code>hand.command(...)</code></a>
+        <a href="./advanced.html"><b>13 ADVANCED</b><span>Combined routing with modifier tap, pan, swipe, pinch, rotate, and explicit intent.</span><code>map + criteria</code></a>
+        <a href="../inspector/index.html"><b>14 WORKBENCH</b><span>Payload, event toggles, active groups, routing, and manual tuning under one surface.</span><code>HandTrick.groups</code></a>
     </div>
 </main>
 </body>
