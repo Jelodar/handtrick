@@ -643,6 +643,8 @@ Examples:
 - `right>up>left>down` -> `circle:ccw`
 - `up>right>down>left` -> `circle:ccw`
 
+Top-level circle events resolve when the path ends by release or pause. They do not fire while the pointer is still drawing, so overlapping suffixes inside `down>right>up>left>down` cannot double-count. A single-count selector such as `circle:ccw` emits once for each non-overlapping complete loop; incomplete trailing segments are ignored. A counted selector such as `circle:2x:cw` wins as one command over its overlapping single-circle loops when it is registered.
+
 Circle events keep normal path data: `path`, `pathText`, `pathSegments`, `matchPattern`, and `matchedPathText`. They also set `direction` and `circleDirection` to `cw` or `ccw`, with `event.circle` carrying `{ direction, count, path, pathText, start, length, startDirection, endDirection, cycles }`.
 
 Circle uses the path recognizer. Tune `path.minDistance`, `path.segmentDistance`, `path.axisRatio`, `path.turnAngle`, and `path.maxPause` when circles feel too eager or too hard. There is no separate freehand-circle recognizer.
@@ -657,6 +659,8 @@ hand.observe('path', { path: 'up>circle:2x:cw', fingers: 2 }, previewTwoFingerLo
 ```
 
 `circle:Nx` means N complete four-segment cycles in the same direction. Each cycle may start on a different side, but every complete cycle must resolve to the requested direction. `right>down>left>up>down>left>up>right` is valid `circle:2x:cw` because `right>down>left>up` and `down>left>up>right` are both clockwise. Finger count is a criterion, not part of the path string: use `hand.on('circle:cw', { fingers: 2 }, fn)` or `hand.observe('path', { path: 'up>circle:2x:cw', fingers: 2 }, fn)`.
+
+Circle atoms inside longer path patterns belong to that path pattern. For example, `up>circle:cw` owns the circle it contains; top-level `circle:cw` does not also fire for the same equal-length atom.
 
 Adjuster order is flexible. `circle:ccw:2x` and `circle:2x:ccw` canonicalize to the same selector. In paths, the same rule applies: `right>circle:ccw:2x` is stored and emitted as `right>circle:2x:ccw`.
 

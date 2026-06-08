@@ -345,7 +345,7 @@ pathMatchDetail(detail, match, type, displayPattern) {
 pathItemBlockedByResolved(item) {
     const path = this.session && this.session.path;
     if (!path || !path.resolved || !path.resolved.length) return false;
-    return path.resolved.some(winner => winner.length > item.length);
+    return path.resolved.some(winner => winner.length > item.length && this.pathItemsConflict(item, winner));
 }
 
 pathMatchKey(type, pattern, start, length, record) {
@@ -354,7 +354,8 @@ pathMatchKey(type, pattern, start, length, record) {
 
 pathSegmentLimit() {
     const opt = this.options.path || {};
-    return Math.max(1, opt.maxSegments || 1, this.longestPathPatternLength());
+    const circleLimit = this.circlePatternRecords().length ? this.pathMaxCircleCount() * 4 : 0;
+    return Math.max(1, opt.maxSegments || 1, this.longestPathPatternLength(), circleLimit);
 }
 
 pathMaxCircleCount() {
@@ -461,12 +462,17 @@ resolvePathEvents(detail, patternItems) {
 
     path.pending = pending.filter(item => {
         if (path.matched[item.key]) return false;
+        if (this.pathItemDefersUntilEnd(item)) return true;
         if (this.pendingPathCanContinue(item, detail.path, patterns, detail)) return true;
         ready.push(item);
         return false;
     });
 
     return this.emitReadyPathItems(detail, ready);
+}
+
+pathItemDefersUntilEnd(item) {
+    return this.pathItemIsCircle(item);
 }
 
 flushPathEvents(detail) {
@@ -487,9 +493,21 @@ emitReadyPathItems(detail, items, omitPathCommand) {
     });
     this.emitPathObservedItems(fresh);
     const commandItems = omitPathCommand ? winners : [{ type: 'path', detail }].concat(winners);
-    const winner = this.emitCommandWinner(commandItems);
+    const winner = this.emitPathCommandWinners(commandItems);
     this.markPathWinners(winners);
     return winner;
+}
+
+emitPathCommandWinners(items) {
+    const circleItems = [];
+    const otherItems = [];
+    (items || []).forEach(item => {
+        if (this.pathItemIsCircle(item)) circleItems.push(item);
+        else otherItems.push(item);
+    });
+    const circleWinner = this.emitCommandWinner(circleItems);
+    const otherWinner = this.emitCommandWinner(otherItems);
+    return otherWinner || circleWinner;
 }
 
 emitPathObservedItems(items) {
@@ -541,7 +559,27 @@ pathItemsSameMatch(a, b) {
 }
 
 pathItemsConflict(a, b) {
+    if (this.pathItemsCanCoexist(a, b)) return false;
     return !this.pathItemsSameMatch(a, b) && this.pathItemsOverlap(a, b);
+}
+
+pathItemsCanCoexist(a, b) {
+    const aCircle = this.pathItemIsCircle(a);
+    const bCircle = this.pathItemIsCircle(b);
+    if (aCircle === bCircle) return false;
+    const circle = aCircle ? a : b;
+    const other = aCircle ? b : a;
+    return other.length > circle.length && !this.pathItemContainsCircleAtom(other);
+}
+
+pathItemIsCircle(item) {
+    const parsed = parseEventSelector(item && item.type);
+    return parsed.valid && parsed.family === 'circle';
+}
+
+pathItemContainsCircleAtom(item) {
+    const pattern = parsePathPattern(item && item.pattern);
+    return pattern.valid && pattern.atoms.some(atom => atom.kind === 'circle');
 }
 
 markPathWinners(items) {
@@ -551,11 +589,13 @@ markPathWinners(items) {
         path.matched[item.key] = true;
         path.resolved.push({
             start: item.start,
-            length: item.length
+            length: item.length,
+            type: item.type,
+            pattern: item.pattern
         });
     });
     path.pending = path.pending.filter(item => {
-        return !items.some(winner => this.pathItemsOverlap(item, winner)) && !this.pathItemBlockedByResolved(item);
+        return !items.some(winner => this.pathItemsConflict(item, winner)) && !this.pathItemBlockedByResolved(item);
     });
 }
 

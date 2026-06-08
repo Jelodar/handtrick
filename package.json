@@ -1,6 +1,6 @@
 {
   "name": "handtrick",
-  "version": "2.3.2",
+  "version": "2.3.3",
   "description": "Standalone intent-aware gesture runtime for pointer, touch, mouse, pen, pressure, and wheel input.",
   "author": {
     "name": "Reza Jelodar",

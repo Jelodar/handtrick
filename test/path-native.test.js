@@ -366,6 +366,141 @@ run('circle count selectors and finger criteria route repeated and multi-finger 
     assert.deepStrictEqual(seen, ['count:2:cw', 'fingers:2:1']);
 });
 
+run('circle command waits for release and ignores overlapping partial loops', () => {
+    let t = 0;
+    const { node, hand } = create({
+        clock: () => t,
+        pan: { enabled: false },
+        swipe: { enabled: false },
+        pinch: { enabled: false },
+        rotate: { enabled: false },
+        path: {
+            minTime: 0,
+            minSamples: 1,
+            minDistance: 30,
+            segmentDistance: 30,
+            axisRatio: 1.25,
+            turnAngle: 45,
+            maxPause: 500
+        }
+    });
+    const seen = [];
+    const points = [
+        [100, 100],
+        [100, 150],
+        [150, 150],
+        [150, 100],
+        [100, 100],
+        [100, 150],
+        [150, 150]
+    ];
+
+    hand.on('circle:ccw', detail => seen.push(detail.circle.start + ':' + detail.circle.pathText));
+
+    hand.pointerDown(pointerEvent(node, 1, points[0][0], points[0][1]));
+    points.slice(1).forEach(point => {
+        t += 40;
+        hand.pointerMove(pointerEvent(node, 1, point[0], point[1]));
+        assert.deepStrictEqual(seen, []);
+    });
+    hand.pointerUp(pointerEvent(node, 1, 150, 150, { buttons: 0 }));
+
+    assert.deepStrictEqual(seen, ['0:down>right>up>left']);
+});
+
+run('single circle selector emits once per non-overlapping loop on release', () => {
+    let t = 0;
+    const { node, hand } = create({
+        clock: () => t,
+        pan: { enabled: false },
+        swipe: { enabled: false },
+        pinch: { enabled: false },
+        rotate: { enabled: false },
+        path: {
+            minTime: 0,
+            minSamples: 1,
+            minDistance: 30,
+            segmentDistance: 30,
+            axisRatio: 1.25,
+            turnAngle: 45,
+            maxPause: 500
+        }
+    });
+    const seen = [];
+    const points = [
+        [100, 100],
+        [100, 150],
+        [150, 150],
+        [150, 100],
+        [100, 100],
+        [100, 150],
+        [150, 150],
+        [150, 100],
+        [100, 100]
+    ];
+
+    hand.on('circle:ccw', detail => seen.push(detail.circle.start + ':' + detail.circle.pathText));
+
+    hand.pointerDown(pointerEvent(node, 1, points[0][0], points[0][1]));
+    points.slice(1).forEach(point => {
+        t += 40;
+        hand.pointerMove(pointerEvent(node, 1, point[0], point[1]));
+        assert.deepStrictEqual(seen, []);
+    });
+    hand.pointerUp(pointerEvent(node, 1, 100, 100, { buttons: 0 }));
+
+    assert.strictEqual(seen.length, 2);
+    assert.deepStrictEqual(seen.slice().sort(), [
+        '0:down>right>up>left',
+        '4:down>right>up>left'
+    ]);
+});
+
+run('counted circle selector wins over repeated single circles on release', () => {
+    let t = 0;
+    const { node, hand } = create({
+        clock: () => t,
+        pan: { enabled: false },
+        swipe: { enabled: false },
+        pinch: { enabled: false },
+        rotate: { enabled: false },
+        path: {
+            minTime: 0,
+            minSamples: 1,
+            minDistance: 30,
+            segmentDistance: 30,
+            axisRatio: 1.25,
+            turnAngle: 45,
+            maxPause: 500
+        }
+    });
+    const seen = [];
+    const points = [
+        [100, 100],
+        [150, 100],
+        [150, 150],
+        [100, 150],
+        [100, 100],
+        [150, 100],
+        [150, 150],
+        [100, 150],
+        [100, 100]
+    ];
+
+    hand.on('circle:cw', () => seen.push('single'));
+    hand.on('circle:2x:cw', detail => seen.push('double:' + detail.circle.count + ':' + detail.circle.start));
+
+    hand.pointerDown(pointerEvent(node, 1, points[0][0], points[0][1]));
+    points.slice(1).forEach(point => {
+        t += 40;
+        hand.pointerMove(pointerEvent(node, 1, point[0], point[1]));
+        assert.deepStrictEqual(seen, []);
+    });
+    hand.pointerUp(pointerEvent(node, 1, 100, 100, { buttons: 0 }));
+
+    assert.deepStrictEqual(seen, ['double:2:0']);
+});
+
 run('circle path atoms support count direction and finger criteria inside combined paths', () => {
     let t = 0;
     const { node, hand } = create({
