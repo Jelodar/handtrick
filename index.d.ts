@@ -378,22 +378,46 @@ declare namespace HandTrick {
         size: number;
     }
 
+    type RegionValue = string | string[];
+    interface RegionPhaseCriteria {
+        current?: RegionValue;
+        start?: RegionValue;
+        tapStart?: RegionValue;
+        sequenceStart?: RegionValue;
+    }
+    type AreaValue = string | string[];
+    interface AreaPhaseCriteria {
+        current?: AreaValue;
+        start?: AreaValue;
+        tapStart?: AreaValue;
+        sequenceStart?: AreaValue;
+    }
+    type GridCriteriaValue = GridCriteria | string | number;
+    type GridCriteriaInput = GridCriteriaValue | GridCriteriaValue[];
+    type GridLocationValue = GridCriteriaValue | GridCriteriaValue[];
+    interface GridPhaseCriteria extends GridCriteria {
+        current?: GridLocationValue;
+        start?: GridLocationValue;
+        tapStart?: GridLocationValue;
+        sequenceStart?: GridLocationValue;
+    }
+
     interface Criteria {
-        region?: string | string[];
-        startRegion?: string | string[];
-        tapStartRegion?: string | string[];
-        grid?: GridCriteria | GridCriteria[] | string | string[];
-        startGrid?: GridCriteria | GridCriteria[] | string | string[];
-        tapStartGrid?: GridCriteria | GridCriteria[] | string | string[];
-        sequenceStartGrid?: GridCriteria | GridCriteria[] | string | string[];
+        region?: RegionValue | RegionPhaseCriteria;
+        startRegion?: RegionValue;
+        tapStartRegion?: RegionValue;
+        grid?: GridCriteriaInput | GridPhaseCriteria;
+        startGrid?: GridCriteriaInput;
+        tapStartGrid?: GridCriteriaInput;
+        sequenceStartGrid?: GridCriteriaInput;
         sequence?: SequenceStepCriteria[] | {
             start?: SequenceStepCriteria;
             end?: SequenceStepCriteria;
             steps?: SequenceStepCriteria[];
         };
-        area?: string | string[];
-        startArea?: string | string[];
-        tapStartArea?: string | string[];
+        area?: AreaValue | AreaPhaseCriteria;
+        startArea?: AreaValue;
+        tapStartArea?: AreaValue;
         edge?: string | string[];
         modifierRegion?: string | string[];
         modifierArea?: string | string[];
@@ -446,7 +470,7 @@ declare namespace HandTrick {
         combo?: string | string[];
         tapCount?: number | number[];
         region?: string | string[];
-        grid?: GridCriteria | GridCriteria[] | string | string[];
+        grid?: GridCriteriaInput;
         area?: string | string[];
     }
 

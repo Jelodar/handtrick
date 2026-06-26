@@ -1,33 +1,37 @@
 # HandTrick
 
-HandTrick is a dependency-free browser gesture runtime for pointer, touch, mouse, pen, pressure, wheel, and keyboard-modified input.
+HandTrick is a dependency-free browser gesture runtime. It turns pointer, touch, mouse, pen, wheel, pressure, and keyboard-modified input into one stable event detail shape.
 
-It turns raw browser input into one event shape for tap, press, pan, swipe, pinch, rotate, held-pointer paths, rolling taps, modifier gestures, pressure, wheel zoom, lifecycle events, and exclusive released sequences.
+It supports mapping gestures to application commands for media controls, viewers, canvases, maps, carousels, inspectors, and other touch-first tools that require effective desktop alternatives.
 
 Runtime dependencies: none.
+
+Runtime language: plain JavaScript. Type declarations are included for editors and TypeScript consumers.
 
 ## Contents
 
 - [Install](#install)
-- [Start](#start)
-- [Mental Model](#mental-model)
+- [Quick Start](#quick-start)
+- [How To Think About HandTrick](#how-to-think-about-handtrick)
+- [Package Entries](#package-entries)
 - [Presets](#presets)
+- [Listeners And Phases](#listeners-and-phases)
+- [Selectors](#selectors)
 - [Events](#events)
-- [Payload](#payload)
-- [Position Metadata](#position-metadata)
 - [Criteria](#criteria)
-- [Paths](#paths)
-- [Sequences](#sequences)
+- [Position, Regions, And Grids](#position-regions-and-grids)
+- [Paths, Circles, And Arcs](#paths-circles-and-arcs)
+- [Released Sequences](#released-sequences)
 - [Rolling Tap](#rolling-tap)
-- [Keyboard Roles](#keyboard-roles)
-- [Intent And Activation](#intent-and-activation)
-- [Ownership And Native Suppression](#ownership-and-native-suppression)
-- [Tuning](#tuning)
-- [API](#api)
-- [Configuration](#configuration)
+- [Keyboard Roles And Modifiers](#keyboard-roles-and-modifiers)
+- [Payload](#payload)
+- [Options](#options)
+- [Ownership And Native Input](#ownership-and-native-input)
+- [API Reference](#api-reference)
 - [Recipes](#recipes)
 - [Examples](#examples)
-- [Build And Test](#build-and-test)
+- [Development](#development)
+- [License](#license)
 
 ## Install
 
@@ -35,53 +39,101 @@ Runtime dependencies: none.
 npm install handtrick
 ```
 
-The package ships browser global, CommonJS, readable ESM, minified global, minified ESM, typings, examples, inspector, source, scripts, and tests.
-
-Pick the entry by loading style:
-
-| Loader | Use | Do not use |
-| --- | --- | --- |
-| `<script src>` | `handtrick.js` or `handtrick.min.js` | `.mjs` |
-| Browser module script | `handtrick.mjs` or `handtrick.min.mjs` | `handtrick.js` |
-| Bundler | `import HandTrick from 'handtrick'` | `handtrick.min.mjs` |
-| CommonJS | `require('handtrick')` | `.mjs` |
-
-Browser global:
+For direct browser use, load one of the shipped files:
 
 ```html
-<script src="handtrick.js"></script>
+<script src="./handtrick.min.js"></script>
 <script>
 const hand = new HandTrick(surface);
 </script>
 ```
 
-Local browser module:
+Or as a browser module:
 
 ```html
 <script type="module">
-import HandTrick from './handtrick.mjs';
+import HandTrick from './handtrick.min.mjs';
+
+const hand = new HandTrick(surface);
 </script>
 ```
 
-CDN browser module:
-
-```html
-<script type="module">
-import HandTrick from 'https://cdn.jsdelivr.net/npm/handtrick/handtrick.min.mjs';
-</script>
-```
-
-Bundler:
+## Quick Start
 
 ```js
 import HandTrick from 'handtrick';
+
+const hand = new HandTrick(surface);
+
+hand.command('tap', { region: 'center' }, togglePlay);
+hand.command('tap:2x', { region: 'left' }, rewind);
+hand.command('tap:2x', { region: 'right' }, forward);
+hand.command('swipe:up', { startRegion: 'bottom' }, showControls);
+
+hand.observe('pinch', event => {
+    zoomBy(event.scale);
+});
 ```
 
-CommonJS:
+The important split:
+
+- Selector text names the gesture shape: `tap:2x`, `swipe:right`, `pinch:out`, `right>down`, `tap>swipe:left`.
+- Criteria filter where, how many fingers, which source, which speed, or which path suffix: `{ region: 'right' }`, `{ fingers: 2 }`, `{ speed: 'flick' }`.
+- `command()` is for app actions that should arbitrate against competing commands.
+- `observe()` is for additive work such as previews, telemetry, cursors, HUDs, and debugging.
+
+Media surface setup:
 
 ```js
-const HandTrick = require('handtrick');
+const hand = new HandTrick(video, 'media');
+
+hand.command('tap', { region: 'center' }, togglePlay);
+hand.command('tap', { region: 'left' }, previous);
+hand.command('tap', { region: 'right' }, next);
+hand.command('swipe:left', next);
+hand.command('swipe:right', previous);
 ```
+
+Preset plus overrides:
+
+```js
+const hand = new HandTrick(surface, ['media', {
+    rotate: { enabled: true, angle: 28, confidence: 1 },
+    path: { consume: 'auto' }
+}]);
+```
+
+## How To Think About HandTrick
+
+HandTrick has four practical layers:
+
+1. Native input enters as pointer, touch, mouse, wheel, or keyboard state.
+2. Session state tracks active points, centers, timing, target rect, topology, keyboard substitution, and ownership.
+3. Recognizers produce semantic details: tap, press, pan, swipe, pinch, rotate, path, circle, arc, rolling, modifier, pressure, wheel.
+4. Dispatch runs additive listeners and command arbitration.
+
+The rules that prevent most integration bugs:
+
+- Use `command()` for state-changing app actions.
+- Use `observe()` for live feedback and diagnostics.
+- Criteria run after recognition. They do not stop recognizers from starting, consuming, claiming native input, or building payloads.
+- Registered selectors activate recognizer families. Criteria do not activate recognizers by themselves.
+- Direct options win over listener activation. If you set `rotate.enabled: false`, a rotate listener cannot re-enable rotate until `setOptions()` changes that option.
+- Handler details are public snapshots. Do not depend on private session state.
+
+Command arbitration picks the best command candidate by combined selector-plus-criteria specificity, then later emitted item when several committed items are dispatched together, then registration order. Handlers with the same winning type, combined specificity, and criteria key fan out as one group.
+
+Released sequences and held paths add one more rule before that sort: longer matching sequence/path patterns win over shorter overlapping ones.
+
+## Package Entries
+
+| Loader | Use | Notes |
+| --- | --- | --- |
+| Classic browser script | `handtrick.js`, `handtrick.min.js` | Exposes `globalThis.HandTrick`. |
+| Browser module script | `handtrick.mjs`, `handtrick.min.mjs` | Use with `type="module"`. |
+| Bundler ESM | `import HandTrick from 'handtrick'` | Prefer the package root. |
+| CommonJS | `const HandTrick = require('handtrick')` | Uses the readable global/CommonJS build. |
+| Types | `index.d.ts` | Declarations only. Runtime stays JavaScript. |
 
 CDN global:
 
@@ -89,424 +141,635 @@ CDN global:
 <script src="https://unpkg.com/handtrick/handtrick.min.js"></script>
 ```
 
-Package entries:
+CDN module:
+
+```html
+<script type="module">
+import HandTrick from 'https://cdn.jsdelivr.net/npm/handtrick/handtrick.min.mjs';
+</script>
+```
+
+Package files:
 
 | File | Purpose |
 | --- | --- |
-| `handtrick.js` | Browser global and CommonJS readable runtime. |
-| `handtrick.mjs` | Browser or direct ESM readable runtime. |
-| `handtrick.min.js` | Minified browser global. |
-| `handtrick.min.mjs` | Minified direct ESM, good for CDN module scripts. |
-| `index.d.ts` | TypeScript declarations. |
+| `handtrick.js` | Readable browser global and CommonJS runtime. |
+| `handtrick.mjs` | Readable direct ESM runtime. |
+| `handtrick.min.js` | Minified browser global and CommonJS runtime. |
+| `handtrick.min.mjs` | Minified direct ESM runtime. |
+| `index.d.ts` | Public declarations. |
 
-Gotchas:
-
-- Use `.mjs` for `type="module"` scripts. `handtrick.js` is the UMD/global and CommonJS entry.
-- Bundlers should import `handtrick`, not a minified file. Let the bundler choose export and compression.
-- `unpkg` and `jsdelivr` package fields point at the global build. Use the explicit `.min.mjs` URL when the page is a module page.
-
-## Start
-
-Smallest useful setup:
-
-```js
-const hand = new HandTrick(surface);
-
-hand.on('tap', event => {
-    console.log(event.tapCount, event.region, event.center.localX);
-});
-
-hand.on('swipe', event => {
-    console.log(event.direction, event.startRegion, event.velocity);
-});
-
-hand.on('pinch', event => {
-    console.log(event.scale);
-});
-```
-
-Media-style setup:
-
-```js
-const hand = new HandTrick(surface, 'media');
-```
-
-Preset plus overrides:
-
-```js
-const hand = new HandTrick(surface, ['media', {
-    rotate: { enabled: true, angle: 28, confidence: 1 }
-}]);
-```
-
-Route with criteria instead of creating many event names:
-
-```js
-hand.on('tap', { region: 'left' }, previous);
-hand.on('tap', { region: 'right' }, next);
-hand.on('swipe:up', { startRegion: 'bottom' }, openDrawer);
-hand.on('tap:2x', { grid: { rows: 3, cols: 3, cell: 'center' } }, focus);
-```
-
-Use the right phase:
-
-```js
-hand.command('swipe:right', next);
-hand.command('tap:2x', play);
-hand.observe('pan', updatePreview);
-hand.observe('tap', { region: 'left' }, log);
-```
-
-Rules:
-
-- `command` is the primary form for state-changing app actions: navigation, media state, editing commands, selection changes.
-- `on` is the general registration API. It uses the event's default phase, so it fits code that intentionally follows HandTrick's phase model.
-- `observe` is additive. Use it for live UI, diagnostics, cursor trails, and logging.
-- Lifecycle, progress, start/end, pressure, wheel, and `swipe:intent` events are observe/additive by default. Use `observe` for these unless you deliberately need to force command phase.
-- Criteria belong in the object argument: `hand.command('swipe:left', { fingers: 2 }, previous)`.
-
-> Tip: `command()` on lifecycle, wheel, pressure, pan progress, or start/end events only forces phase. It does not make those streams exclusive like released tap/swipe/path/sequence commands.
-
-Shortest path:
-
-| Need | Use | Avoid |
-| --- | --- | --- |
-| Browser global or CommonJS | `handtrick.js` / `handtrick.min.js` | `.mjs` in classic scripts. |
-| Browser module or CDN module | `handtrick.mjs` / `handtrick.min.mjs` | UMD globals. |
-| App command | `hand.command(selector, criteria?, handler)` | Putting criteria in selector text. |
-| Telemetry/live UI | `hand.observe(selector, criteria?, handler)` | Command phase unless state changes. |
-| Runtime registry | `recognizers` for option blocks, `families` for emitted buckets, `groups` for concrete events. | Treating `events` as full grammar. |
-| Filters | Criteria object argument. | Unknown criteria keys; they never match. |
-
-## Mental Model
-
-HandTrick has four layers:
-
-1. Browser input is normalized into session state: points, timing, target rect, keyboard state, pressure, wheel deltas.
-2. Recognizers build semantic candidates: tap, press, pan, swipe, pinch, rotate, path, rolling, modifier, wheel.
-3. Additive listeners run for observation and progress.
-4. Command listeners arbitrate. Longest sequence/path, most specific selector, then registration order decide the winner.
-
-Important rules:
-
-- App actions belong in `command` handlers.
-- Visual feedback and telemetry belong in `observe`.
-- Criteria filter handlers after recognition. They do not stop a recognizer from starting, consuming, or building payload.
-- Command handlers with the same winning selector and semantically equal criteria run as one group.
-- Registered listeners activate recognizer families. You usually do not need `intent.events`.
-- Direct config wins over listener activation. If `rotate.enabled` is `false`, a rotate listener cannot revive rotate until `setOptions` changes it.
-- Every handler receives a cloned detail object. Do not depend on private session state.
-
-> Tip: option gates and criteria are different. `path.fingers`, `pan.fingers`, and enabled recognizer options decide whether a recognizer can start. `{ fingers: 2 }` on a listener only filters a detail after recognition.
+Use `.mjs` for module scripts. Bundlers should import `handtrick`, not minified files.
 
 ## Presets
 
-| Preset | Best for | Main behavior | Example |
-| --- | --- | --- | --- |
-| `media` | Video/image surfaces | Tap, tap-hold pan, swipe, pinch, rolling tap, modifier gestures. Rotate off by default. | `new HandTrick(video, 'media')` |
-| `viewer` | Image/doc viewers | Pan, wheel zoom, pinch; swipe off. | `new HandTrick(canvas, 'viewer')` |
-| `carousel` | Paging surfaces | Swipe-focused, with pan/pinch/rotate off. | `new HandTrick(slides, 'carousel')` |
-| `drawing` | Canvas and pressure input | Low pan threshold, pressure enabled, semantic gestures reduced. | `new HandTrick(canvas, 'drawing')` |
-| `map` | Map-like canvases | Pan, pinch, rotate, wheel zoom; swipe off. | `new HandTrick(mapEl, 'map')` |
+Presets are normal options. Later overrides win.
 
-Create a preset object when a plain config is easier:
+| Preset | Best For | Main Behavior |
+| --- | --- | --- |
+| `media` | Video and image surfaces | Tap zones, tap-hold pan, swipe, pinch, rolling tap, modifier gestures. Rotate off by default. |
+| `viewer` | Image and document viewers | Pan, wheel zoom, pinch. Swipe off. |
+| `carousel` | Paging surfaces | Swipe-focused. Pan, pinch, rotate off. |
+| `drawing` | Canvas and pressure input | Low pan threshold, pressure enabled, semantic gestures reduced. |
+| `map` | Map-like canvases | Pan, pinch, rotate, wheel zoom. Swipe off. |
 
 ```js
-const options = HandTrick.preset('map', {
-    rotate: { angle: 18 }
+const hand = new HandTrick(surface, 'viewer');
+```
+
+Preset arrays merge left to right:
+
+```js
+const hand = new HandTrick(surface, ['map', {
+    rotate: { angle: 18 },
+    wheel: { preventDefault: true }
+}]);
+```
+
+Create an options object without constructing:
+
+```js
+const options = HandTrick.preset('media', {
+    swipe: { velocity: 0.18 }
 });
 ```
 
 Preset and listener interaction:
 
-- Presets are normal config; they do not hide the underlying options.
-- Explicit listeners extend preset intent. If `media` starts with rotate disabled by preset, `hand.on('rotate', handler)` can enable the family unless direct config set `rotate.enabled: false`.
-- Direct disabled options stay disabled until `setOptions` changes them.
-- Presets do not ship manual `intent.events` lists. Listener-derived activation stays the default app pattern.
+- Presets can disable recognizers as defaults.
+- A listener can activate a recognizer disabled by a preset when that disable was not an explicit user option.
+- A direct `enabled: false` option stays disabled until `setOptions()` changes it.
+- Leave `intent.events` unset for normal apps so registered listeners drive activation.
+
+## Listeners And Phases
+
+```js
+hand.on(type, handler, options);
+hand.on(type, criteria, handler, options);
+hand.once(type, handler, options);
+hand.once(type, criteria, handler, options);
+hand.off(type, handler);
+hand.off(type);
+hand.off();
+
+hand.command(type, handler);
+hand.command(type, criteria, handler);
+hand.observe(type, handler);
+hand.observe(type, criteria, handler);
+```
+
+`type` is a selector. `criteria` is checked with `HandTrick.matches(detail, criteria)`.
+
+Phases:
+
+| Phase | Meaning |
+| --- | --- |
+| `command` | Exclusive app command candidate. |
+| `observe` | Additive listener. |
+| `intent` | Additive pre-command phase. |
+| `update` | Additive update phase. |
+
+Default phase:
+
+- `*` is observe.
+- Lifecycle, progress, start/end, pressure, wheel, and `swipe:intent` events are observe.
+- Final semantic events such as `tap`, `swipe:right`, `circle:cw`, and released sequence selectors are command.
+- `command()` always forces command phase.
+- `observe()` always forces observe phase.
+
+Examples:
+
+```js
+hand.command('swipe:left', previous);
+hand.command('tap:2x', { region: 'right' }, forward);
+
+hand.observe('pan', updateDragPreview);
+hand.observe('session:move', updatePointerHud);
+hand.observe('*', logEvent);
+```
+
+> Note: forcing command phase on continuous or lifecycle streams does not make them behave like released exclusive commands. It only changes which listener phase is used.
+
+## Selectors
+
+Selectors are normalized to lowercase canonical text. Supported canonical shape:
+
+```txt
+family[:mode][:count][:direction][:state]
+```
+
+Not every slot is valid for every family. Invalid selectors remain inert; they do not accidentally activate recognizers.
+
+Families:
+
+```txt
+tap
+press
+pan
+swipe
+pinch
+rotate
+path
+circle
+arc
+rolling
+pressure
+wheel
+session
+gesture
+fingers
+input
+```
+
+Direction values:
+
+| Family | Directions |
+| --- | --- |
+| Swipe, path, rolling, arc | `left`, `right`, `up`, `down` |
+| Pinch | `in`, `out` |
+| Rotate, circle | `cw`, `ccw` |
+
+Valid selector examples:
+
+```js
+hand.command('tap:2x', fn);
+hand.command('swipe:right', fn);
+hand.observe('swipe:intent:left', preview);
+hand.command('pinch:out', fn);
+hand.command('rotate:mod:cw', fn);
+hand.command('circle:2x:ccw', fn);
+hand.command('tap:2x>swipe:right', fn);
+hand.command('right>down>left', fn);
+```
+
+Invalid selector examples:
+
+```js
+hand.on('swipe:right:2f', fn);
+hand.on('swipe:flick:right', fn);
+hand.on('swipe:slow:right', fn);
+hand.on('tap:2f', fn);
+hand.on('rolling:3f:right', fn);
+hand.on('tap:swipe', fn);
+hand.on('path:right>down', fn);
+```
+
+Use criteria instead:
+
+```js
+hand.command('swipe:right', { fingers: 2 }, fn);
+hand.command('swipe:right', { speed: 'flick' }, fn);
+hand.command('circle:cw', { fingers: 2 }, fn);
+```
+
+Runtime validation:
+
+```js
+HandTrick.event('Swipe:Right');          // 'swipe:right'
+HandTrick.event('tap:2x>swipe:right');  // 'tap:2x>swipe:right'
+HandTrick.path('Right>Down');           // 'right>down'
+HandTrick.isEvent('swipe:right:2f');    // false
+```
+
+`HandTrick.events` is a finite registry. Open grammar such as `tap:4x`, `circle:3x:cw`, bare paths, and released sequences is validated by `HandTrick.event()` or `HandTrick.path()`.
 
 ## Events
 
-Selectors are lowercase, colon-separated, and deterministic. Invalid selector shapes stay opaque strings; they do not accidentally activate recognizers.
-
 ### Lifecycle
 
-| Event | Description | Example |
-| --- | --- | --- |
-| `session:start` | First pointer starts a session. | `hand.observe('session:start', startInk)` |
-| `session:move` | Any tracked pointer moves. | `hand.observe('session:move', trackCursor)` |
-| `session:end` | Last tracked pointer releases. | `hand.observe('session:end', settleUi)` |
-| `session:cancel` | Native cancel, disable, or manual cancel. | `hand.observe('session:cancel', clearPreview)` |
-| `fingers:change` | Effective pointer count changed. | `hand.observe('fingers:change', showCount)` |
-| `gesture:start` | A gesture crosses activation threshold. | `hand.observe('gesture:start', lockUi)` |
-| `gesture:update` | Active gesture gets movement. | `hand.observe('gesture:update', updateHud)` |
-| `gesture:transition` | Runtime transitions between active gesture states. | `hand.observe('gesture:transition', inspect)` |
-| `gesture:commit` | Runtime commits a semantic candidate. | `hand.observe('gesture:commit', inspect)` |
-| `gesture:end` | Active gesture ended normally. | `hand.observe('gesture:end', unlockUi)` |
-| `gesture:cancel` | Active gesture cancelled. | `hand.observe('gesture:cancel', resetUi)` |
-| `input:ignored` | Native input matched `ignore`. | `hand.observe('input:ignored', markIgnored)` |
+| Selector | Fires |
+| --- | --- |
+| `session:start` | First accepted pointer/touch/mouse input starts a session. |
+| `session:move` | A tracked pointer/touch/mouse input moves. |
+| `session:end` | Last tracked pointer/touch/mouse input ends normally. |
+| `session:cancel` | Session is cancelled by native cancel, disable, destroy, or manual cancel. |
+| `fingers:change` | Effective pointer count changes during a session. |
+| `gesture:start` | A tracked session begins. |
+| `gesture:update` | Active session receives movement/update. |
+| `gesture:transition` | Runtime transitions between gesture states, often topology changes. |
+| `gesture:commit` | Runtime commits a semantic candidate. |
+| `gesture:end` | Active gesture/session ended normally. |
+| `gesture:cancel` | Active gesture/session cancelled. |
+| `input:ignored` | Native input matched `ignore`. |
 
 ### Tap
 
-Tap events cover single taps, tap chains, and effective finger count.
-
-| Event | Description | Example |
-| --- | --- | --- |
-| `tap` | Any successful tap. | `hand.on('tap', toggleChrome)` |
-| `tap:1x`, `tap:2x`, `tap:3x` | Tap count inside one nearby, recent chain. | `hand.on('tap:2x', zoomIn)` |
-| `tap:sequence` | Every tap in a chain, with `tapSequence`. | `hand.observe('tap:sequence', drawTrail)` |
-| `tap:multi` | Second and later taps in a chain. | `hand.on('tap:multi', cycleSelection)` |
-| `tap:mod` | Tap while a modifier anchor/key is active. | `hand.on('tap:mod', alternatePick)` |
+| Selector | Meaning |
+| --- | --- |
+| `tap` | Any successful tap. |
+| `tap:1x` | First tap in a tap chain. |
+| `tap:2x` | Second tap in a nearby, recent tap chain. |
+| `tap:3x` | Third tap in a tap chain. |
+| `tap:${number}x` | Open-ended tap count alias. |
+| `tap:sequence` | Additive tap-chain detail for every tap. |
+| `tap:multi` | Second or later tap in a tap chain. |
+| `tap:mod` | Tap while pointer or keyboard modifier context is active. |
 
 ```js
-hand.on('tap:2x', { fingers: 1 }, event => {
-    console.log(event.tapCount, event.center.localX, event.center.localY);
-});
+hand.command('tap', toggle);
+hand.command('tap:2x', zoom);
+hand.command('tap:4x', secretCommand);
+hand.observe('tap:sequence', drawTapTrail);
+hand.command('tap:mod', alternatePick);
 ```
 
-`tap:2x` means the second tap in one tap chain. It is not two unrelated `tap` handlers that happened close together.
-
-> Tip: finger count is criteria. Use `hand.command('tap', { fingers: 2 }, fit)` or `hand.command('tap:2x', { fingers: 2 }, compare)`.
+`tap:2x` is the second tap in one chain. It is not two unrelated `tap` handlers.
 
 ### Press
 
-| Event | Description | Example |
-| --- | --- | --- |
-| `press` | Long press threshold met. | `hand.on('press', openMenu)` |
-| `press:start` | Press activated. | `hand.observe('press:start', primeTooltip)` |
-| `press:move` | Movement during a held press. | `hand.observe('press:move', moveMagnifier)` |
-| `press:end` | Pointer released after press. | `hand.observe('press:end', closeMagnifier)` |
-| `press:cancel` | Press cancelled by movement or ownership. | `hand.observe('press:cancel', hideTooltip)` |
+| Selector | Meaning |
+| --- | --- |
+| `press` | Long press threshold met. |
+| `press:start` | Press activated. |
+| `press:move` | Held press moved while still valid. |
+| `press:end` | Pointer released after press. |
+| `press:cancel` | Press cancelled by movement, competing ownership, or session cancel. |
 
 ### Pan
 
-| Event | Description | Example |
-| --- | --- | --- |
-| `pan:start` | Movement passed `pan.threshold`. | `hand.observe('pan:start', grabCanvas)` |
-| `pan` | Continuous movement updates. | `hand.on('pan', dragCanvas)` |
-| `pan:end` | Pan ended. | `hand.observe('pan:end', persistOffset)` |
-| `pan:mod:start`, `pan:mod`, `pan:mod:end` | Pan with pointer or keyboard modifier. | `hand.on('pan:mod', resizeSelection)` |
+| Selector | Meaning |
+| --- | --- |
+| `pan:start` | Movement passed pan proof. |
+| `pan` | Continuous pan update. |
+| `pan:end` | Pan ended. |
+| `pan:mod:start` | Modifier pan started. |
+| `pan:mod` | Pan while pointer/keyboard modifier context is active. |
+| `pan:mod:end` | Modifier pan ended. |
 
-```js
-hand.on('pan', event => {
-    element.style.transform = `translate(${event.deltaX}px, ${event.deltaY}px)`;
-});
-```
-
-> Tip: `pan` is a continuous movement channel. It can update state before a later path or release command resolves, so keep pan handlers reversible or scoped to live movement.
+`pan` is continuous. Keep pan handlers reversible or scoped to live UI when a later path or release command can still win.
 
 ### Swipe
 
 Swipe is a release gesture. Use `pan` or `swipe:intent` for live movement.
 
-| Event | Description | Example |
-| --- | --- | --- |
-| `swipe` | Any directional swipe. | `hand.on('swipe', routeByDirection)` |
-| `swipe:left`, `swipe:right`, `swipe:up`, `swipe:down` | Directional swipe. | `hand.on('swipe:right', nextPhoto)` |
-| `swipe:mod` | Swipe while modifier keys are active. | `hand.on('swipe:mod', duplicateMove)` |
-| `swipe:mod:{direction}` | Directional modified swipe. | `hand.on('swipe:mod:right', cloneToNext)` |
-| `swipe:intent`, `swipe:intent:{direction}` | Preliminary direction before release. | `hand.observe('swipe:intent', previewPageTurn)` |
-
-Finger count and speed are criteria for swipe:
-
-```js
-hand.on('swipe:left', { fingers: 2 }, previousAlbum);
-hand.on('swipe:up', { fingers: 3, speed: 'flick' }, archiveStack);
-hand.on('swipe:mod:right', { fingers: 2 }, cloneToNext);
-```
-
-Speed is a release label:
+| Selector | Meaning |
+| --- | --- |
+| `swipe` | Any committed swipe. |
+| `swipe:left`, `swipe:right`, `swipe:up`, `swipe:down` | Directional swipe. |
+| `swipe:intent` | Preliminary swipe candidate. |
+| `swipe:intent:left`, `swipe:intent:right`, `swipe:intent:up`, `swipe:intent:down` | Directional swipe intent. |
+| `swipe:mod` | Swipe while modifier context is active. |
+| `swipe:mod:left`, `swipe:mod:right`, `swipe:mod:up`, `swipe:mod:down` | Directional modified swipe. |
 
 ```js
-hand.on('swipe:left', { speed: 'slow' }, preciseMove);
-hand.on('swipe:left', { speed: ['normal', 'flick'] }, next);
+hand.command('swipe:left', previous);
+hand.command('swipe:right', { fingers: 2 }, nextAlbum);
+hand.command('swipe:up', { speed: 'flick' }, archive);
+hand.observe('swipe:intent', previewPageTurn);
 ```
 
-`slow` means distance-qualified but below `swipe.velocity`; `normal` means at least `swipe.velocity`; `flick` means at least 2x `swipe.velocity`.
+Speed labels:
 
-If another recognizer consumes the session first, final `swipe:*` commands do not fire unless that recognizer intentionally allows fallback.
+| Speed | Meaning |
+| --- | --- |
+| `slow` | Distance-qualified but below `swipe.velocity`. |
+| `normal` | At least `swipe.velocity`. |
+| `flick` | At least 2x `swipe.velocity`. |
 
 ### Pinch
 
-Pinch is a two-finger transform. Use pan, path, rolling, or criteria-routed tap/swipe for other finger counts.
+Pinch is a two-finger transform.
 
-| Event | Description | Example |
-| --- | --- | --- |
-| `pinch:start` | Scaling passed threshold. | `hand.observe('pinch:start', cacheZoomStart)` |
-| `pinch` | Continuous scale updates, rebased to `1`. | `hand.on('pinch', applyZoom)` |
-| `pinch:in`, `pinch:out` | Directional pinch. | `hand.on('pinch:out', zoomIn)` |
-| `pinch:mod` | Pinch while non-substitute modifier keys are active. | `hand.on('pinch:mod', precisionZoom)` |
-| `pinch:mod:start`, `pinch:mod:end` | Modified pinch lifecycle. | `hand.observe('pinch:mod:end', commit)` |
-| `pinch:mod:in`, `pinch:mod:out` | Directional modified pinch. | `hand.on('pinch:mod:out', zoomSelection)` |
-| `pinch:end` | Pinch ended. | `hand.observe('pinch:end', commitZoom)` |
+| Selector | Meaning |
+| --- | --- |
+| `pinch:start` | Pinch started. |
+| `pinch` | Continuous pinch update. |
+| `pinch:end` | Pinch ended. |
+| `pinch:in`, `pinch:out` | Directional pinch. |
+| `pinch:mod` | Modified pinch. |
+| `pinch:mod:start`, `pinch:mod:end` | Modified pinch lifecycle. |
+| `pinch:mod:in`, `pinch:mod:out` | Directional modified pinch. |
 
 ### Rotate
 
-Rotate is a two-finger transform. Its proof is angular movement between the two active contacts.
+Rotate is a two-finger transform based on angular movement between active contacts.
 
-| Event | Description | Example |
-| --- | --- | --- |
-| `rotate:start` | Rotation passed threshold. | `hand.observe('rotate:start', cacheAngle)` |
-| `rotate` | Continuous rotation updates, rebased to `0`. | `hand.on('rotate', applyRotation)` |
-| `rotate:cw`, `rotate:ccw` | Directional rotation. | `hand.on('rotate:cw', rotateRight)` |
-| `rotate:mod` | Rotate while non-substitute modifier keys are active. | `hand.on('rotate:mod', precisionRotate)` |
-| `rotate:mod:start`, `rotate:mod:end` | Modified rotate lifecycle. | `hand.observe('rotate:mod:end', snapAngle)` |
-| `rotate:mod:cw`, `rotate:mod:ccw` | Directional modified rotate. | `hand.on('rotate:mod:cw', rotateCopyRight)` |
-| `rotate:end` | Rotate ended. | `hand.observe('rotate:end', snapAngle)` |
+| Selector | Meaning |
+| --- | --- |
+| `rotate:start` | Rotate started. |
+| `rotate` | Continuous rotate update. |
+| `rotate:end` | Rotate ended. |
+| `rotate:cw`, `rotate:ccw` | Directional rotate. |
+| `rotate:mod` | Modified rotate. |
+| `rotate:mod:start`, `rotate:mod:end` | Modified rotate lifecycle. |
+| `rotate:mod:cw`, `rotate:mod:ccw` | Directional modified rotate. |
 
-Rotate uses angular proof plus moved-finger proof. Raise `rotate.angle`, `rotate.confidence`, or `rotate.dominance` when two-finger pans or pinches create false rotation.
+Raise `rotate.angle`, `rotate.confidence`, or `rotate.dominance` when two-finger pans or pinches create false rotation.
 
-### Path
+### Path, Circle, Arc
 
-Held-pointer direction chains use bare directions:
+| Selector | Meaning |
+| --- | --- |
+| `path:start` | First path segment recognized. |
+| `path` | Path update. |
+| `path:end` | Path session ended. |
+| `left>down` | Bare path command. |
+| `circle`, `circle:cw`, `circle:ccw`, `circle:2x:cw` | Path-derived circle commands. |
+| `arc`, `arc:up`, `arc:right` | Path-derived arc commands. |
 
-```js
-hand.on('left>down', undo);
-hand.on('right>up', redo);
-```
+Full path behavior is covered in [Paths, Circles, And Arcs](#paths-circles-and-arcs).
 
-| Event | Description | Example |
-| --- | --- | --- |
-| `path:start` | First segment recognized. | `hand.observe('path:start', beginPreview)` |
-| `path` | Path updated with new segments. | `hand.observe('path', updatePreview)` |
-| `path:end` | Path session ended. | `hand.observe('path:end', clearPreview)` |
-| `{direction}>{direction}` | Bare path command. | `hand.on('right>down>left>up', addPanel)` |
-| `circle`, `circle:cw`, `circle:ccw` | Four-turn path circle alias with direction. | `hand.on('circle:cw', rotateTool)` |
-| `circle:Nx`, `circle:Nx:{direction}` | Count-qualified circle. Use criteria for fingers. | `hand.on('circle:2x:cw', { fingers: 2 }, command)` |
-| `{direction}>circle:Nx:{direction}` | Circle atom inside a longer path. Use criteria for fingers. | `hand.on('up>circle:2x:cw', { fingers: 2 }, command)` |
-| `arc`, `arc:{direction}` | Three-segment path arc. Use criteria for fingers. | `hand.on('arc:up', openTray)` |
+### Rolling
 
-Do not write `path:right>down`. Prefixed path syntax is invalid by design.
+| Selector | Meaning |
+| --- | --- |
+| `rolling` | Any directional rolling tap. |
+| `rolling:left`, `rolling:right`, `rolling:up`, `rolling:down` | Directional rolling tap. |
 
-### Rolling Tap
-
-A rolling tap is a staggered, overlapping same-hand tap wave. It is not a modifier and not a simultaneous multi-finger tap.
-
-| Event | Description | Example |
-| --- | --- | --- |
-| `rolling` | Any directional rolling tap. | `hand.on('rolling', routeByRollDirection)` |
-| `rolling:left`, `rolling:right`, `rolling:up`, `rolling:down` | Directional roll. | `hand.on('rolling:right', nextLayer)` |
-
-Use criteria for roll count:
+Use criteria for count:
 
 ```js
 hand.command('rolling:right', { fingers: 3 }, nextTool);
 ```
 
-### Modifier
+### Pressure And Wheel
 
-Modifier is input context. A held anchor pointer or a keyboard modifier key can route the next action without changing the underlying gesture shape.
-
-| Event | Description | Example |
-| --- | --- | --- |
-| `tap:mod` | Tap while holding modifier. Use criteria for modifier/action counts. | `hand.on('tap:mod', alternatePick)` |
-| `pan:mod:start` | Modifier pan started. | `hand.observe('pan:mod:start', showConstraint)` |
-| `pan:mod` | Modifier pan movement. | `hand.on('pan:mod', resizeSelection)` |
-| `pan:mod:end` | Modifier pan ended. | `hand.observe('pan:mod:end', commitResize)` |
-| `pinch:mod`, `rotate:mod`, `swipe:mod` | Modified transforms/swipes. | `hand.on('rotate:mod:cw', rotateDuplicate)` |
-
-For transforms and swipes, prefer criteria when the route depends on which modifier was active:
+| Selector | Meaning |
+| --- | --- |
+| `pressure:change` | Aggregate pressure changed past threshold. |
+| `wheel` | Normalized wheel input. |
+| `wheel:zoom` | Wheel mapped to scale. |
 
 ```js
-hand.on('swipe:mod:right', { combo: 'alt' }, duplicateToNext);
-hand.on('pinch:mod:out', { combo: 'alt' }, zoomSelection);
-hand.on('rotate:mod:cw', { keys: 'shift+meta' }, rotateCopyRight);
+hand.observe('pressure:change', setBrushWeight);
+hand.observe('wheel', scrollTimeline);
+hand.command('wheel:zoom', zoomAtPointer);
 ```
 
-`swipe:mod:right`, `pinch:mod:out`, and `rotate:mod:cw` are separate command types from their unmodified forms. Observers on base events can still see modified payloads through `event.modified`.
+## Criteria
 
-Modifier fingers and action fingers are separate. In `tap:mod`, the held anchor/key is modifier context; the action pointer is the tap. Use `{ modifierFingers }`, `{ actionFingers }`, or `{ totalFingers }` when that distinction matters.
+Criteria live in the second argument:
 
-### Pressure, Wheel, Sequence
+```js
+hand.command('swipe:left', { fingers: 2, speed: 'flick' }, previousFast);
+```
 
-| Family | Event | Description | Example |
-| --- | --- | --- | --- |
-| Pressure | `pressure:change` | Aggregate pointer pressure changed. | `hand.observe('pressure:change', setBrushWeight)` |
-| Wheel | `wheel` | Normalized wheel event. | `hand.observe('wheel', scrollTimeline)` |
-| Wheel | `wheel:zoom` | Wheel mapped to scale. | `hand.on('wheel:zoom', zoomAtCursor)` |
-| Sequence | `{gesture}>{gesture}` | Released gesture sequence. | `hand.on('tap:2x>swipe:right', fastForward)` |
+Core rules:
 
-## Payload
+- Omitted or `null` criteria match.
+- Unknown top-level criteria keys never match.
+- Arrays are OR.
+- Different keys are AND.
+- Criteria filter public detail fields after recognition.
 
-Handlers receive one detail object. Session gesture details share these fields:
+```js
+HandTrick.matches(detail) === true;
+HandTrick.matches(detail, null) === true;
+HandTrick.matches(detail, { typo: true }) === false;
+```
 
-| Field | Type | Description |
-| --- | --- | --- |
-| `type` | `string` | Event name, such as `swipe:right`, `tap:2x`, or `left>down`. |
-| `originalEvent` | `Event\|null` | Native event when available. |
-| `target` | `EventTarget\|null` | Original target for active pointer/input. |
-| `currentTarget` | `EventTarget\|null` | Element bound to HandTrick. |
-| `pointerType` | `string` | `mouse`, `touch`, `pen`, `wheel`, or `none`. |
-| `fingers` | `number` | Effective pointer count, including keyboard substitution. |
-| `actualFingers` | `number` | Physical active pointer count. |
-| `syntheticFingers` | `number` | Keyboard-substituted count, or `0`. |
-| `fingerSource` | `string` | `pointer`, `keyboard`, or `none`. Criteria may use `auto` as no source filter. |
-| `maxFingers`, `maxActualFingers` | `number` | Max effective and physical pointer counts seen in session. |
-| `pointers`, `activePointers`, `changedPointer`, `changedPointers` | positions | Pointer snapshots. |
-| `center`, `startCenter`, `previousCenter` | positions | Current, phase-start, and previous aggregate positions. |
-| `region`, `startRegion`, `previousRegion` | `string` | Position aliases from center snapshots. |
-| `area`, `startArea`, `edge`, `startEdge`, `edgeRegion`, `startEdgeRegion` | position metadata | Broad area and edge state. |
-| `halfX`, `halfY`, `halfRegion`, `thirdX`, `thirdY` | `string` | Coarse position buckets. |
-| `deltaX`, `deltaY`, `absX`, `absY`, `travel` | `number` | Translation and movement distance from phase start. |
-| `stepX`, `stepY`, `stepDistance`, `stepElapsed` | `number` | Last-sample movement. |
-| `velocityX`, `velocityY`, `velocity`, `stepVelocity` | `number` | Motion speed in px/ms. |
-| `direction`, `axis` | `string` | Dominant direction and axis. |
-| `keys`, `keyCombo`, `keyboard` | keyboard state | Keyboard snapshot. |
-| `confidence`, `confidences` | recognition scores | Pan, pinch, rotate, and swipe confidence. |
-| `phase` | `string` | Runtime/session phase such as `began`, `active`, `settling`, `ended`, or `cancelled`; not listener phase. |
-| `intent` | object | Commitment state, possible gestures, pruning state, sample count. |
-| `motion` | object | Two-pointer motion shape. |
-| `topology` | object | Pointer add/remove counts and max pointer count. |
-| `rect` | object | Target rect used for position metadata. |
-| `claimed`, `consumed`, `releaseGuarded`, `tapHold`, `tapChain` | booleans | Ownership and gesture state diagnostics. |
-| `preventDefault()` | function | Prevent native event when possible. |
-| `stopPropagation()` | function | Stop native event when possible. |
+Common examples:
 
-Gesture-specific fields:
+```js
+hand.command('tap', { region: ['left', 'right'] }, edgeTap);
+hand.command('tap:2x', { tapStartRegion: 'left', region: 'right' }, crossSideDouble);
+hand.command('swipe:right', { region: { start: 'left', current: 'right' } }, leftToRight);
+hand.command('tap:2x', { grid: { rows: 4, cols: 4, current: 15, tapStart: 12 } }, rangeTap);
+hand.command('swipe:right', { fingers: 2, fingerSource: 'keyboard' }, desktopSwipe);
+hand.command('pan:mod', { modifierName: 'shiftAlt' }, resize);
+hand.observe('path', { path: 'down>right' }, preview);
+```
 
-| Field | Appears on | Description |
-| --- | --- | --- |
-| `tapCount`, `tapSequence` | Tap | Cumulative tap count and tap-chain details. |
-| `sequence`, `gestureSequence` | Released sequences | Matched gesture list, raw listener pattern, duration, and resolution. |
-| `scale`, `scaleDelta`, `rawScale`, `rawScaleDelta` | Pinch, wheel zoom | Rebased scale and raw diagnostics. |
-| `angle`, `previousAngle`, `rotation`, `rawRotation`, `angularVelocity` | Rotate | Rebased signed degrees and angular speed. |
-| `pressure`, `previousPressure`, `pressureDelta`, `normalizedPressure` | Pressure/pointer detail | Aggregate pressure values. |
-| `path`, `pathText`, `pathSegments`, `matchPattern`, `matchedPathText`, `pathDistance` | Path | Direction list/string, segment data, canonical matched command, physical matched slice. |
-| `circle`, `circleDirection`, `circleCount` | Circle path | Cycle metadata, repeated count, and `cw`/`ccw` direction. |
-| `arc`, `arcDirection` | Arc path | Three-segment arc metadata and cardinal direction. |
-| `rolling`, `rollingCount`, `rollingDirection` | Rolling | Source, direction, count, timing, span, contact order. |
-| `actionPointer`, `modifierPointers`, `modifier` | Modifier | Action pointer, anchor pointers, source/name/keyboard metadata. |
-| `actionDeltaX`, `actionDeltaY`, `actionTravel`, `actionDirection` | Modifier pan | Movement of the action pointer from modifier start. |
-| `keyboardSubstitute` | Keyboard roles | Role, combo, keys, and substituted finger count. |
-| `rawDeltaX`, `rawDeltaY`, `rawDeltaZ`, `deltaMode` | Wheel | Native wheel deltas before semantic mapping. |
-| `panAxis` | Pan | Axis lock/dominant axis result when relevant. |
+Current top-level criteria keys:
 
-Payload invariants:
+```txt
+region
+startRegion
+tapStartRegion
+grid
+startGrid
+tapStartGrid
+sequenceStartGrid
+sequence
+area
+startArea
+tapStartArea
+edge
+modifierRegion
+modifierArea
+modifierSource
+modifierName
+modifierFingers
+actionFingers
+totalFingers
+key
+keys
+combo
+modifierKeys
+direction
+axis
+speed
+modified
+path
+pathText
+fingers
+actualFingers
+syntheticFingers
+fingerSource
+keyboardRole
+pointerType
+tapCount
+```
 
-- `instance` is non-enumerable.
-- `center`, `startCenter`, `previousCenter`, and pointer fields are snapshots, not live internal points.
-- Gesture-specific fields are additive. Existing payload fields should not disappear from a family.
-- Criteria read public payload fields; do not route on private runtime state.
-- Wheel and `input:ignored` can be thinner because they may be emitted outside an active pointer session.
+### Location Criteria
 
-## Position Metadata
+Simple location filters use the existing top-level keys:
 
-`center`, `startCenter`, `previousCenter`, pointers, and modifier positions expose:
+```js
+{ region: 'left' }
+{ startRegion: 'bottom' }
+{ grid: { rows: 4, cols: 4, index: 15 } }
+{ tapStartGrid: { rows: 4, cols: 4, index: 12 } }
+```
 
-| Property | Description |
+Compound location filters keep shared configuration once and compare multiple phases:
+
+```js
+{ region: { start: 'left', current: 'right' } }
+{ area: { current: 'edge', start: 'inside' } }
+{ grid: { rows: 4, cols: 4, current: 15, tapStart: 12 } }
+{ grid: { rows: 4, cols: 4, current: { col: 3 }, start: { row: 0 } } }
+```
+
+Phase keys:
+
+| Key | Checks |
 | --- | --- |
-| `x`, `y` | Alias coordinates for page position. |
+| `current` | Current event center. Same phase as `region`, `grid`, and `area`. |
+| `start` | Gesture phase start center. Not the full browser input session start. |
+| `tapStart` | First tap center in the active tap chain. Fails when no tap-chain data exists. |
+| `sequenceStart` | First committed gesture center in released sequence detail. Fails outside released sequence detail. |
+
+`sequenceStart` location shortcuts normalize into `sequence.start`. Use full `sequence` criteria when filtering more than first-step location:
+
+```js
+hand.command('tap>swipe:right', {
+    sequence: {
+        start: {
+            fingers: 3,
+            grid: { rows: 4, cols: 4, index: 0 }
+        },
+        end: { direction: 'right' }
+    }
+}, command);
+```
+
+Compound grid phase values accept numbers, strings, grid leaf objects, or arrays of those values. A number means flat index:
+
+```js
+{ grid: 4 }
+{ startGrid: 0 }
+{ grid: { rows: 4, cols: 4, current: 15 } }
+```
+
+Compound grid string tokens are semantic:
+
+| Token | Meaning |
+| --- | --- |
+| `any` | Any cell in this phase grid. |
+| `top`, `bottom` | First or last row. |
+| `left`, `right` | First or last column. |
+| `center` | Center cell for odd grids, center block for even grids. |
+| `edge` | Grid border: first or last row or column. |
+| `top-left`, `top-right`, `bottom-left`, `bottom-right` | Corner cells. |
+| `rowN`, `colN` | Zero-based row or column. |
+| `rowN-colM` | Exact zero-based row and column pair. |
+
+Gotchas:
+
+- Criteria filter handlers after recognition. They do not activate recognizers or stop native input by themselves.
+- `region: 'edge'` means the physical edge band from `edge.size`; `grid: { current: 'edge' }` means grid border.
+- Top-level `rows` and `cols` are not criteria. Put them inside `grid`.
+- Legacy `grid: 'top'` and `grid: { cell: 'top' }` keep exact cell-name behavior. Compound `grid: { current: 'top' }` means the full top row.
+- Unknown nested `region`, `area`, or `grid` phase keys fail closed.
+- Grid objects with only `rows` and `cols`, or only unknown leaf fields, fail closed.
+- Empty arrays never match.
+
+### Criteria Reference
+
+| Criteria | Checks |
+| --- | --- |
+| `region` | Current center via region matcher. |
+| `startRegion` | Gesture phase start center. |
+| `tapStartRegion` | First tap center in the current tap chain. |
+| `grid` | Current custom grid cell. |
+| `startGrid` | Start center custom grid cell. |
+| `tapStartGrid` | First tap custom grid cell in the current tap chain. |
+| `sequenceStartGrid` | First committed gesture center in a released sequence. Normalizes through `sequence.start.grid`. |
+| `sequence` | Per-step filters for released sequence detail. |
+| `area`, `startArea`, `tapStartArea` | Broad area: `center`, `edge`, `inside`, `outside`. `area` also accepts compound phase criteria. |
+| `edge` | Current edge region. |
+| `modifierRegion`, `modifierArea` | Modifier anchor/source position. |
+| `modifierSource` | `touch` or `keyboard`. |
+| `modifierName` | Named modifier combo or modifier role. |
+| `modifierFingers` | Modifier anchor finger count. |
+| `actionFingers` | Action pointer finger count. |
+| `totalFingers` | Modifier plus action fingers. |
+| `key` | Every listed canonical key is present. |
+| `keys`, `combo` | Combo match against `event.keyCombo`. |
+| `modifierKeys` | Combo match against `event.modifier.keyCombo`. |
+| `direction` | Event direction. |
+| `axis` | Event axis. |
+| `speed` | Swipe speed label. |
+| `modified` | Boolean modifier context flag. |
+| `path`, `pathText` | Path suffix/pattern match. |
+| `fingers` | Effective finger count. |
+| `actualFingers` | Physical pointer count. |
+| `syntheticFingers` | Keyboard-substituted count. |
+| `fingerSource` | `pointer`, `keyboard`, `none`, `auto`. |
+| `keyboardRole` | Keyboard substitute role. |
+| `pointerType` | `mouse`, `touch`, `pen`, `wheel`, `none`, or browser source. |
+| `tapCount` | Tap-chain count. |
+
+`fingerSource` values:
+
+| Value | Meaning |
+| --- | --- |
+| omitted | Accept pointer, keyboard, or none. |
+| `auto` | Same as omitted. Useful for generated criteria. |
+| `pointer` | Physical pointer/touch/pen/mouse source. |
+| `keyboard` | Keyboard substitution supplied the effective finger count. |
+| `none` | No active pointer source, such as wheel-only events. |
+
+### Sequence Criteria
+
+`sequence` filters released sequence detail. It does not define the sequence selector.
+
+Array form checks steps by index:
+
+```js
+hand.command('tap>swipe:left', {
+    sequence: [
+        { fingers: 3, fingerSource: 'keyboard' },
+        { direction: 'left' }
+    ]
+}, fn);
+```
+
+Object form:
+
+```js
+hand.command('tap>swipe:left', {
+    sequence: {
+        start: { fingers: 3 },
+        end: { direction: 'left' },
+        steps: [
+            { family: 'tap' },
+            { family: 'swipe', direction: 'left' }
+        ]
+    }
+}, fn);
+```
+
+Sequence step criteria keys:
+
+```txt
+event
+gesture
+family
+mode
+state
+direction
+fingers
+actualFingers
+syntheticFingers
+fingerSource
+keyboardRole
+keys
+combo
+tapCount
+region
+grid
+area
+```
+
+Rules:
+
+- Empty sequence arrays never match.
+- Unknown keys inside a `sequence` object never match.
+- Object form must contain `start`, `end`, or `steps`.
+- Step arrays can be shorter than the actual sequence. Checked entries must match.
+- There is no top-level `sequenceStartRegion` or `sequenceStartArea`.
+
+## Position, Regions, And Grids
+
+Every center or pointer position exposes:
+
+| Field | Meaning |
+| --- | --- |
+| `x`, `y` | Alias coordinates for the current point. |
 | `pageX`, `pageY` | Document coordinates. |
 | `clientX`, `clientY` | Viewport coordinates. |
 | `localX`, `localY` | Coordinates relative to `currentTarget`. |
-| `ratioX`, `ratioY` | Unclamped normalized local coordinates. |
-| `clampedRatioX`, `clampedRatioY` | `0..1` normalized local coordinates. |
-| `inside` | Whether point is inside target rect. |
+| `ratioX`, `ratioY` | Unclamped local ratio. |
+| `clampedRatioX`, `clampedRatioY` | `0..1` local ratio. |
+| `inside` | Whether the point is inside the target rect. |
 | `area` | `center`, `edge`, `inside`, or `outside`. |
 | `edge` | `{ top, right, bottom, left }` booleans. |
-| `edgeRegion` | Specific edge/corner or `none`. |
-| `halfX`, `halfY`, `halfRegion` | Coarse halves: `left`, `right`, `top`, `bottom`, `center`. |
-| `thirdX`, `thirdY`, `region`, `zone` | 3x3 region. `zone` is the same stable string as `region`. |
-| `grid(rows, cols)` | Custom grid lookup returning `{ row, col, rows, cols, index }`. |
+| `edgeRegion` | Edge/corner name or `none`. |
+| `halfX`, `halfY`, `halfRegion` | Half-axis buckets with a center dead zone. |
+| `thirdX`, `thirdY`, `region`, `zone` | 3x3 region. `zone` equals `region`. |
+| `grid(rows, cols)` | Custom grid lookup. |
 
 3x3 region names:
 
@@ -516,10 +779,18 @@ Payload invariants:
 | 1 | `left` | `center` | `right` |
 | 2 | `bottom-left` | `bottom` | `bottom-right` |
 
+Region matching uses `HandTrick.region(pointOrEvent, value)`. A value may match multiple position aliases:
+
+- `left` may match a third, half, or edge alias.
+- `top-left` may match 3x3 region, half region, or edge corner.
+- `edge` means the physical edge band, not a grid border.
+- `any` matches every non-null point.
+
+Examples:
+
 ```js
-hand.on('tap', { region: 'left' }, previous);
-hand.on('swipe:up', { startRegion: 'bottom' }, showControls);
-hand.on('tap:2x', { grid: { rows: 3, cols: 3, cell: 'center' } }, focus);
+hand.command('tap', { region: 'left' }, previous);
+hand.command('swipe:up', { startRegion: 'bottom' }, showControls);
 
 hand.on('tap', event => {
     const cell = event.center.grid(4, 4);
@@ -527,200 +798,189 @@ hand.on('tap', event => {
 });
 ```
 
-## Criteria
+### Grid Criteria
 
-Criteria are handler filters. They do not stop recognizers from running.
-Unknown criteria keys never match. That makes typos fail closed instead of broadening a handler.
+Grid object fields:
+
+| Field | Meaning |
+| --- | --- |
+| `rows` | Grid row count. Default `3`. Minimum effective value `1`. |
+| `cols` | Grid column count. Default `3`. Minimum effective value `1`. |
+| `row` | Zero-based row index or array. |
+| `col` | Zero-based column index or array. |
+| `index` | Flat index, `row * cols + col`, or array. |
+| `cell` | Generated cell name or array. |
 
 ```js
-hand.on('tap', {
-    region: ['left', 'right'],
-    fingers: 1,
-    tapCount: 2
-}, event => {});
-
-hand.on('pan:mod', {
-    modifierSource: 'keyboard',
-    modifierName: 'shiftAlt',
-    modifierKeys: 'shift+alt'
-}, event => {});
-
-hand.on('path', {
-    path: 'down>right'
-}, event => {});
+hand.command('tap', { grid: { rows: 4, cols: 4, index: 15 } }, bottomRight);
+hand.command('tap', { grid: { rows: 4, cols: 4, row: 0 } }, topRow);
+hand.command('tap', { grid: { rows: 4, cols: 4, col: 0 } }, leftColumn);
+hand.command('tap:2x', {
+    grid: { rows: 3, cols: 3, current: { col: 2 }, tapStart: { col: 2 } }
+}, sameSideDoubleTap);
 ```
 
-Selector text names the gesture shape. Criteria names filters such as fingers, regions, speed, source, and path suffixes. Do not put finger count or swipe speed in selector text.
+Grid string behavior:
 
-> Tip: `hand.on('swipe:left:2f', fn)`, `hand.on('swipe:flick:left', fn)`, and `hand.on('circle:2f:cw', fn)` are invalid. Use `hand.command('swipe:left', { fingers: 2 }, fn)`, `hand.command('swipe:left', { speed: 'flick' }, fn)`, and `hand.command('circle:cw', { fingers: 2 }, fn)`.
+- A non-object grid value is treated as `{ cell: value }`.
+- A number grid value is treated as `{ index: value }`.
+- `grid: 'top'` in a 3x3 grid means top-center cell, not the entire top row.
+- `grid: 'left'` in a 3x3 grid means center-left cell, not the entire left column.
+- In compound grid phase values, strings are semantic. `grid: { current: 'top' }` means the top row.
 
-Common criteria:
-
-| Criteria | Checks | Example |
-| --- | --- | --- |
-| `region` | Current 3x3/half/edge alias. | `{ region: ['left', 'right'] }` |
-| `startRegion` | Gesture phase start region. | `{ startRegion: 'bottom' }` |
-| `tapStartRegion` | First tap center in active tap chain. | `{ tapStartRegion: 'left' }` |
-| `grid` | Current custom grid cell. | `{ grid: { rows: 3, cols: 3, cell: 'center' } }` |
-| `startGrid` | Starting custom grid cell. | `{ startGrid: { rows: 2, cols: 2, index: 3 } }` |
-| `tapStartGrid` | First tap grid cell in active tap chain. | `{ tapStartGrid: { rows: 3, cols: 3, col: 0 } }` |
-| `sequenceStartGrid` | First committed gesture cell in released sequence. | `{ sequenceStartGrid: { rows: 3, cols: 3, col: 2 } }` |
-| `sequence` | Per-step filters for released sequences. | `{ sequence: [{ fingers: 3 }, { fingers: 1 }] }` |
-| `area`, `startArea`, `tapStartArea` | Broad area. | `{ area: 'edge' }` |
-| `edge` | Current edge region. | `{ edge: 'top' }` |
-| `modifierRegion`, `modifierArea` | Modifier anchor position. | `{ modifierRegion: 'top-left' }` |
-| `modifierFingers`, `actionFingers`, `totalFingers` | Modifier anchor/action counts. | `{ actionFingers: 1 }` |
-| `direction` | Direction on swipe, rolling, path detail, or movement. | `{ direction: 'up' }` |
-| `axis` | Dominant axis. | `{ axis: 'x' }` |
-| `speed` | Swipe speed label: `slow`, `normal`, or `flick`. | `{ speed: ['normal', 'flick'] }` |
-| `modified` | Swipe, pinch, or rotate used modifier context. | `{ modified: true }` |
-| `path`, `pathText` | Held-pointer path suffix, with long-path arbitration. | `{ path: ['down>right', 'right>up'] }` |
-| `fingers` | Effective finger count. | `{ fingers: [2, 3] }` |
-| `actualFingers` | Physical pointer count. | `{ actualFingers: 1 }` |
-| `syntheticFingers` | Keyboard-substituted count. | `{ syntheticFingers: 2 }` |
-| `fingerSource` | `pointer`, `keyboard`, `none`, or `auto`. | `{ fingerSource: 'keyboard' }` |
-| `keyboardRole` | Matched keyboard substitute role. | `{ keyboardRole: 'twoFingers' }` |
-| `modifierName` | Named modifier combo or role. | `{ modifierName: 'shiftAlt' }` |
-| `modifierSource` | Modifier origin. | `{ modifierSource: 'keyboard' }` |
-| `key`, `keys`, `combo`, `modifierKeys` | Keyboard/combo values. | `{ combo: 'shift+alt' }` |
-| `tapCount` | Tap-chain count. | `{ tapCount: 3 }` |
-| `pointerType` | Browser pointer type. | `{ pointerType: 'pen' }` |
-
-`fingerSource` meanings:
-
-| Value | Meaning |
-| --- | --- |
-| omitted | Accept pointer, keyboard, or none. |
-| `auto` | Same as omitted; useful for generated criteria. |
-| `pointer` | Real pointer/touch/pen only. |
-| `keyboard` | Keyboard-substituted input only. |
-| `none` | Events without active pointer source, such as wheel-only events. |
-
-## Paths
-
-Paths are held-pointer direction chains made from direction atoms and documented path atoms:
+Avoid broad-match quirks:
 
 ```js
-hand.on('down>right', event => {
+{ grid: 15 }                  // flat index in the default 3x3 grid
+{ grid: { index: 15 } }       // same index form with room for rows and cols
+{ grid: { rows: 4, cols: 4 } } // configures lookup but does not filter
+{ grid: { idx: 15 } }         // unknown leaf field; never matches
+```
+
+## Paths, Circles, And Arcs
+
+Paths are held-pointer cardinal direction chains.
+
+```js
+hand.command('down>right', event => {
     openCommand(event.pathSegments);
 });
 
-hand.on('path', { path: 'left>up' }, event => {
-    undoAt(event.center);
-});
-
-const command = HandTrick.path('left>down'); // left>down
+hand.observe('path', { path: 'left>up' }, preview);
 ```
 
-Multi-finger paths are regular path commands plus `path.fingers` and criteria:
+Do not prefix a path command with `path:`:
+
+```js
+hand.command('path:left>up', fn); // invalid
+hand.command('left>up', fn);      // valid
+```
+
+Multi-finger paths require both recognizer configuration and criteria:
 
 ```js
 const hand = new HandTrick(surface, {
     path: { fingers: [1, 2] }
 });
 
-hand.on('right>up', { fingers: 2 }, twoFingerCorner);
+hand.command('right>up', { fingers: 2 }, twoFingerCorner);
 hand.observe('path', { path: 'right>up', fingers: 2 }, previewTwoFingerCorner);
 ```
 
-Circle paths are path-derived events. Any four-segment cycle that follows `right>down>left>up` from any starting side emits clockwise; the opposite cycle emits counter-clockwise:
+`{ fingers: 2 }` means the shared center movement of a two-finger path. It does not mean each finger drew its own path.
+
+### Circle
+
+Circle is path-derived. A four-segment cycle following `right>down>left>up` from any starting side is clockwise. The reverse cycle is counter-clockwise.
 
 ```js
-hand.on('circle:cw', event => {
-    rotateTool(event.direction, event.circle.pathText);
-});
-
-hand.on('circle:ccw', undoRotateTool);
-hand.on('circle', { fingers: 2 }, twoFingerCircle);
-hand.on('circle:2x:cw', { fingers: 2 }, doubleClockwiseCircle);
+hand.command('circle:cw', redo);
+hand.command('circle:ccw', undo);
+hand.command('circle:2x:cw', { fingers: 2 }, doubleClockwise);
 ```
 
-Examples:
+Clockwise examples:
 
-- `right>down>left>up` -> `circle:cw`
-- `down>left>up>right` -> `circle:cw`
-- `left>up>right>down` -> `circle:cw`
-- `right>up>left>down` -> `circle:ccw`
-- `up>right>down>left` -> `circle:ccw`
-
-Top-level circle events resolve when the path ends by release or pause. They do not fire while the pointer is still drawing, so overlapping suffixes inside `down>right>up>left>down` cannot double-count. A single-count selector such as `circle:ccw` emits once for each non-overlapping complete loop; incomplete trailing segments are ignored. A counted selector such as `circle:2x:cw` wins as one command over its overlapping single-circle loops when it is registered.
-
-Circle events keep normal path data: `path`, `pathText`, `pathSegments`, `matchPattern`, and `matchedPathText`. They also set `direction` and `circleDirection` to `cw` or `ccw`, with `event.circle` carrying `{ direction, count, path, pathText, start, length, startDirection, endDirection, cycles }`.
-
-Circle uses the path recognizer. Tune `path.minDistance`, `path.segmentDistance`, `path.axisRatio`, `path.turnAngle`, and `path.maxPause` when circles feel too eager or too hard. There is no separate freehand-circle recognizer.
-
-Circle also works as a path atom inside bare path commands and path criteria:
-
-```js
-hand.on('up>circle', openRadialMenu);
-hand.observe('path', { path: 'left>circle:ccw' }, previewCounterClockwise);
-hand.on('up>circle:2x:cw', openAfterTwoClockwiseLoops);
-hand.observe('path', { path: 'up>circle:2x:cw', fingers: 2 }, previewTwoFingerLoops);
+```txt
+right>down>left>up
+down>left>up>right
+left>up>right>down
 ```
 
-`circle:Nx` means N complete four-segment cycles in the same direction. Each cycle may start on a different side, but every complete cycle must resolve to the requested direction. `right>down>left>up>down>left>up>right` is valid `circle:2x:cw` because `right>down>left>up` and `down>left>up>right` are both clockwise. Finger count is a criterion, not part of the path string: use `hand.on('circle:cw', { fingers: 2 }, fn)` or `hand.observe('path', { path: 'up>circle:2x:cw', fingers: 2 }, fn)`.
+Counter-clockwise examples:
 
-Circle atoms inside longer path patterns belong to that path pattern. For example, `up>circle:cw` owns the circle it contains; top-level `circle:cw` does not also fire for the same equal-length atom.
+```txt
+right>up>left>down
+up>left>down>right
+left>down>right>up
+```
 
-Adjuster order is flexible. `circle:ccw:2x` and `circle:2x:ccw` canonicalize to the same selector. In paths, the same rule applies: `right>circle:ccw:2x` is stored and emitted as `right>circle:2x:ccw`.
-
-Multi-finger paths use the effective pointer count and the shared center path. `{ fingers: 2 }` does not mean each finger draws its own circle; it means the path recognizer saw a two-finger path and the center movement matched the circle atom. `path.fingers` must allow that count, e.g. `{ path: { fingers: [1, 2] } }`, before a two-finger path can start.
-
-`path.maxCircleCount` guards accidental huge selectors. The default is `6`, so `circle:7x` does not become an active path record unless configured with `{ path: { maxCircleCount: 7 } }` or higher.
-
-Arc paths are three-segment path atoms. Direction is the first segment direction, so both `up>right>down` and `up>left>down` match `arc:up`; both `down>left>up` and `down>right>up` match `arc:down`.
+Circle atoms work inside longer paths and criteria:
 
 ```js
-hand.on('arc:up', openTopTray);
-hand.on('right>arc:down', openAfterDownArc);
+hand.command('up>circle', openRadialMenu);
+hand.command('up>circle:2x:cw', openAfterTwoLoops);
+hand.observe('path', { path: 'left>circle:ccw' }, preview);
+```
+
+Details:
+
+- `circle:Nx` means N complete four-segment cycles in the same direction.
+- Adjuster order is flexible: `circle:ccw:2x` canonicalizes to `circle:2x:ccw`.
+- `circle:1x:cw` canonicalizes to `circle:cw`.
+- `path.maxCircleCount` limits very large count selectors. Default is `6`.
+- Circle events keep normal path fields and add `circle`, `circleDirection`, and `circleCount`.
+
+### Arc
+
+Arc is a three-segment path atom. Direction is the first segment direction.
+
+```js
+hand.command('arc:up', openTopTray);
+hand.command('right>arc:down', openAfterDownArc);
 hand.observe('path', { path: 'arc:left', fingers: 2 }, previewTwoFingerLeftArc);
 ```
 
+Both `up>right>down` and `up>left>down` match `arc:up`.
+
+### Path Proof
+
 Recognizer proof:
 
-- New segment needs enough distance.
+- New segments need enough distance.
 - Axis must be clear enough.
 - Turns must be real, not jitter.
 - Long pauses break path continuity.
-- Straight one-segment movement is deliberately conservative because it can also be a swipe.
+- Straight one-segment movement is conservative because it can also be a swipe.
 
-Path consumption:
+Tune these when paths feel wrong:
 
-| Mode | Meaning | Use when |
+| Option | Effect |
+| --- | --- |
+| `path.minDistance` | Distance before first segment. |
+| `path.segmentDistance` | Distance before later segments. |
+| `path.axisRatio` | How clean a cardinal direction must be. |
+| `path.turnAngle` | How strong a turn must be. |
+| `path.maxPause` | Pause limit between segments. |
+
+### Path Consumption
+
+| Mode | Meaning | Use When |
 | --- | --- | --- |
-| `auto` | Default. Single straight segment can still become a swipe; turns and path command winners own the session. | Most apps, especially media surfaces. |
-| `eager` | First path segment owns the session. | Paths must beat swipes immediately. |
-| `never` | Path never consumes by itself. | Path telemetry/commands may intentionally coexist with release gestures. |
+| `auto` | Default. A single straight segment allows release gestures unless a turn or command-phase path winner consumes. | Most apps. |
+| `eager` | First path segment consumes immediately and blocks release tap/swipe fallback. | Path-heavy surfaces. |
+| `never` | Path does not consume by itself. Path commands and release gestures may both fire. | Diagnostics or deliberate coexistence. |
 
-Only explicit string modes are supported. Invalid values, including booleans and `null`, fall back to `auto`.
+Only string modes are supported. Invalid values, including booleans and `null`, fall back to `auto`.
 
-Path and swipe gotcha:
+Path/swipe gotchas:
 
-- Listener-derived intent means any path listener can activate the path recognizer.
-- Criteria such as `startGrid` are command filters, not recognizer start gates.
+- Any path listener can activate the path recognizer.
+- Criteria such as `{ startGrid }` are filters, not start gates.
 - `path.consume: 'eager'` can consume a straight one-finger swipe before release.
-- `hand.command('path', { path: 'right' }, fn)` can consume a straight one-segment swipe when it wins; observe/default path criteria do not.
-- Two-finger swipes avoid that specific conflict because default paths use `path.fingers: [1]`.
-- `path.consume: 'never'` can allow a path command and a final swipe from the same release if both qualify.
-- Circle and arc are path-derived event families. Tune `path.minDistance`, `path.segmentDistance`, `path.axisRatio`, and `path.turnAngle` when their proof feels too strict or too loose.
+- In `auto`, `hand.command('path', { path: 'right' }, fn)` can consume a straight one-segment swipe when it wins.
+- Observe-only path criteria do not consume a straight release swipe in `auto`.
+- `path.consume: 'never'` can allow both a path command and a final swipe from the same release.
+- Default `path.fingers: [1]` means two-finger swipes avoid the one-finger path conflict unless you enable two-finger paths.
 
-For media viewers that need normal one-finger swipes plus path commands:
+For media viewers that need one-finger swipes plus path commands:
 
 ```js
 const hand = new HandTrick(surface, ['media', {
-    intent: { events: null },
     path: { consume: 'auto' }
 }]);
 ```
 
-Longest bare path command wins:
+### Path Arbitration
+
+Longest path wins:
 
 ```js
-hand.on('right>down>left>up', addWorkspace);
-hand.on('right>down>left>up>right>down>left>up', spreadWorkspace);
+hand.command('right>down>left>up', addWorkspace);
+hand.command('right>down>left>up>right>down>left>up', spreadWorkspace);
 ```
 
-If the user draws eight segments, `spreadWorkspace` runs and `addWorkspace` does not. If the user stops after four segments, `addWorkspace` runs when the path session ends. HandTrick keeps enough path history for registered long paths even when `path.maxSegments` is lower.
+If the user draws eight segments, only `spreadWorkspace` runs. If the user stops after four, `addWorkspace` runs when the path session ends.
 
 Path criteria use the same arbitration:
 
@@ -729,106 +989,141 @@ hand.observe('path', { path: 'right>down>left>up' }, addWorkspace);
 hand.observe('path', { path: 'right>down>left>up>right>down>left>up' }, spreadWorkspace);
 ```
 
-The shorter criteria pattern does not fire for the trailing half of the longer path.
+## Released Sequences
 
-## Sequences
-
-Sequences use `>` between committed gestures after releases:
+Released sequences join committed gestures with `>`:
 
 ```js
-hand.on('tap>tap>swipe', event => {
-    console.log(event.gestureSequence.duration);
-});
-
-hand.on('tap:2x>swipe:right', fastForward);
+hand.command('tap>tap>swipe:right', fn);
+hand.command('tap:2x>swipe:right', fn);
+hand.command('rolling>tap:mod', fn);
 ```
 
 Rules:
 
-- Sequences are exclusive. If `tap>tap>swipe` wins, shorter pending `tap`, `tap:2x`, `tap>swipe`, and direct `swipe` handlers for the same chain do not fire.
-- Longest match wins.
-- Ties prefer higher specificity, such as `swipe:right` over `swipe`.
-- Aggregate tap aliases expand into tap atoms. `tap:2x>swipe` equals `tap>tap>swipe`; `tap:3x>swipe` equals `tap>tap>tap>swipe`.
-- Explicit atoms are clearest when documenting commands.
-- Direction-specific swipe aliases work inside sequences.
-- Gap must fit `intent.sequenceWindow` (default `1200` ms).
-- Use `hand.resetSequences()` after consuming a command when app state needs a hard boundary.
-
-> Tip: sequence selectors do not carry per-atom criteria. Put step filters in sequence criteria, such as `{ sequence: [{ fingers: 3 }, { direction: 'left' }] }`.
-
-> Tip: a direct `swipe:right` listener can be suppressed by a pending `tap>tap>swipe:right` command. That is intentional. Sequence handlers get a short window to win before shorter fallbacks fire.
-
-Paths and sequences cannot be merged into one selector.
+- Sequence atoms must be valid event selectors.
+- `tap:2x>swipe:right` expands to two tap steps followed by a right swipe.
+- Direction-specific swipes work inside sequences.
+- Legacy colon style such as `tap:swipe` is not supported.
+- Finger aliases inside sequences are invalid. Use sequence criteria.
+- Sequences are exclusive while the sequence window is open.
+- Longest match wins, then specificity.
+- A direct fallback such as `swipe:right` may be delayed or suppressed by a pending longer sequence.
+- Gap must fit `intent.sequenceWindow`, default `1200` ms.
+- Retained history is bounded by `intent.sequenceMax`, default `8`.
 
 ```js
-hand.on('tap>swipe:left>right>up', handler); // invalid for "tap, swipe, then path"
+hand.command('tap:2x', nextMedia);
+hand.command('tap>tap>swipe:right', seekAhead);
+hand.command('tap:2x>swipe:right', seekAhead);
 ```
 
-Why: `tap>swipe:left` is a released sequence; `right>up` is a held-pointer path. A sequence atom must be a valid event selector, and a bare path is its own continuous recognizer, not one released sequence atom.
+If the user performs `tap>tap>swipe:right`, the sequence command wins and direct `tap:2x` / `swipe:right` fallbacks for that chain do not run. If the user stops after the second tap, `tap:2x` can still fire after the pending window closes.
 
-Use two commands and app state when a workflow needs both:
+Step criteria:
 
 ```js
-let pathArmed = false;
+hand.command('tap>swipe:left', {
+    sequence: [
+        {
+            fingers: 3,
+            fingerSource: 'keyboard',
+            keyboardRole: 'threeFingers'
+        },
+        { direction: 'left' }
+    ]
+}, command);
+```
 
-hand.on('tap>swipe:left', () => {
-    pathArmed = true;
+Paths and sequences are separate recognizers. This is invalid for "tap, swipe, then path":
+
+```js
+hand.on('tap>swipe:left>right>up', handler);
+```
+
+Use app state when a workflow needs both:
+
+```js
+let armed = false;
+
+hand.command('tap>swipe:left', () => {
+    armed = true;
 });
 
-hand.on('right>up', { fingers: 1 }, event => {
-    if (!pathArmed) return;
-    pathArmed = false;
+hand.command('right>up', event => {
+    if (!armed) return;
+    armed = false;
     openCornerCommand(event);
 });
-```
 
-Reset that state on timeout, route change, or `session:cancel` in real apps.
+hand.observe('session:cancel', () => {
+    armed = false;
+});
+```
 
 ## Rolling Tap
 
-A rolling tap is proven by stagger plus overlap.
+A rolling tap is a staggered, overlapping same-hand tap wave. It is not a simultaneous multi-finger tap and not a modifier.
 
 Default proof:
 
-- Exactly 2, 3, or 4 contacts.
+- 2, 3, or 4 contacts.
 - Adjacent down events are `10..500` ms apart.
 - Each adjacent contact overlaps: pointer N goes down before pointer N-1 lifts.
 - Each finger holds no more than `780` ms.
 - Movement stays under `28` px.
 - Contact order is monotonic and directional.
-- Total directional span is at least `24` px.
+- Directional span is at least `24` px.
 - Each adjacent step is at least `10` px.
 - Adjacent contacts stay within same-hand gap bounds.
 
 ```js
-hand.on('rolling:right', event => {
+hand.command('rolling:right', event => {
     console.log(event.rolling.count, event.rolling.delays);
 });
 
-hand.on('rolling:left', { fingers: 3 }, command);
+hand.command('rolling:left', { fingers: 3 }, command);
 ```
 
-Near-simultaneous contacts below `rolling.minDelay` stay normal multi-finger taps. Slow stagger above `rolling.maxDelay` becomes separate tap/modifier input.
+Near-simultaneous contacts below `rolling.minDelay` remain normal multi-finger taps. Slow stagger above `rolling.maxDelay` becomes separate tap/modifier input.
 
-Rolling proof runs before multi-finger tap fallback. When a directional two- or three-finger roll is plausible, it can suppress `tap` handlers filtered with `{ fingers: 2 }` or `{ fingers: 3 }`, and modifier-tap fallback for the same overlapping contacts.
+Three- and four-finger rolls get wider defaults through `rolling.maxDelayByFingers`, `rolling.maxGapByFingers`, and `rolling.maxHoldByFingers`.
 
-Three- and four-finger rolls get wider default bounds through `rolling.maxDelayByFingers`, `rolling.maxGapByFingers`, and `rolling.maxHoldByFingers`.
+Desktop substitute: Meta-click chains can emit keyboard rolling. A short directional Meta-click line with two or three clicks emits a keyboard rolling tap. Invalid or non-directional Meta clicks fall back to the normal tap chain after the pending window.
 
-`event.rolling.source` is `pointer` or `keyboard`. Pointer rolls include `overlapCount` and `overlaps`; keyboard rolls report `overlapCount: 0` so apps can distinguish diagnostics without changing handlers.
+`event.rolling.source` is `pointer` or `keyboard`.
 
-Separate one-finger taps never resolve as `rolling`. A physical roll needs overlap across distinct pointer IDs. On desktop, Meta-click chains are the explicit keyboard substitute. Meta-click twice in a short directional line emits a two-finger keyboard rolling tap; Meta-click three times emits a three-finger one. Invalid or non-directional Meta clicks fall back to the normal tap chain after the pending window.
+## Keyboard Roles And Modifiers
 
-## Keyboard Roles
+Keyboard roles make desktop testing and mouse-first apps closer to touch without faking pointer coordinates.
 
-Keyboard roles make desktop testing and mouse-first apps close to touch without faking pointer coordinates.
+Default roles:
 
-| Role | Default combo | Emits | Example |
-| --- | --- | --- | --- |
-| `modifier` | `shift` | `tap:mod`, `pan:mod:start`, `pan:mod`, `pan:mod:end` | Shift-drag resizes instead of moves. |
-| `twoFingers` | `alt` | One pointer reports `fingers: 2`. | Alt-swipe changes folder on desktop. |
-| `threeFingers` | `ctrl` | One pointer reports `fingers: 3`. | Ctrl-tap opens compare. |
-| `fourFingers` | `shift+meta` | One pointer reports `fingers: 4`. | Shift+Meta-tap opens app command. |
-| `rollingTap` | `meta` | Directional Meta-click chains emit `rolling`. | Meta-click left-to-right cycles layers. |
+| Role | Default Combo | Effect |
+| --- | --- | --- |
+| `modifier` | `shift` | Routes `tap:mod` and `pan:mod`. |
+| `twoFingers` | `alt` | One pointer reports `fingers: 2`. |
+| `threeFingers` | `ctrl` | One pointer reports `fingers: 3`. |
+| `fourFingers` | `shift+meta` | One pointer reports `fingers: 4`. |
+| `rollingTap` | `meta` | Directional Meta-click chains emit `rolling`. |
+
+```js
+hand.command('tap', { fingers: 2 }, fit);
+hand.command('tap', { fingers: 2, fingerSource: 'keyboard' }, fitFromDesktopOnly);
+hand.command('tap', { fingers: 2, fingerSource: 'pointer' }, fitFromTouchOnly);
+```
+
+Keyboard substitution changes:
+
+- `fingers`
+- `maxFingers`
+- `syntheticFingers`
+- `fingerSource`
+- `keyboardSubstitute`
+
+It does not change `actualFingers`.
+
+Customize roles:
 
 ```js
 const hand = new HandTrick(surface, {
@@ -848,68 +1143,11 @@ const hand = new HandTrick(surface, {
     }
 });
 
-hand.on('pan:mod', { modifierName: 'resize' }, resize);
-hand.on('swipe', { fingers: 2, fingerSource: 'keyboard' }, desktopTwoFingerSwipe);
-hand.on('tap', { fingers: 4 }, fourFingerCommand);
+hand.command('pan:mod', { modifierName: 'resize' }, resizeSelection);
+hand.command('swipe:left', { fingers: 3 }, previousGroup);
 ```
 
-Rules:
-
-- Combos are exact after normalization.
-- Set a role to `null` or `false` to free the combo.
-- Named `keyboard.combos` label modifier gestures.
-- Keyboard substitution changes `fingers` and `maxFingers`; `actualFingers` stays physical pointer count.
-- Omitted `fingerSource` criteria accepts pointer and keyboard input.
-- `{ fingerSource: 'auto' }` is an explicit no-filter form.
-- Use `fingerSource: 'pointer'` or `keyboard` only when the command must be source-specific.
-- Keyboard rolling sets `keyboardSubstitute.role` to `rollingTap` and `rolling.source` to `keyboard`.
-
-`fingers` is the effective command count. Use `actualFingers` when physical touch count matters.
-
-Examples, from broad to specific:
-
-```js
-hand.on('tap', { fingers: 2 }, fit);
-```
-
-Accepts real two-finger tap and Alt-click by default.
-
-```js
-hand.on('tap', { fingers: 2, fingerSource: 'keyboard' }, fitFromDesktopOnly);
-hand.on('tap', { fingers: 2, fingerSource: 'pointer' }, fitFromTouchOnly);
-```
-
-Splits desktop substitute from physical touch.
-
-```js
-const hand = new HandTrick(surface, {
-    modifier: {
-        keyboard: {
-            roles: {
-                twoFingers: 'alt',
-                threeFingers: 'ctrl',
-                fourFingers: 'shift+meta',
-                rollingTap: 'meta',
-                modifier: 'shift'
-            },
-            combos: {
-                resize: 'shift+alt'
-            }
-        }
-    }
-});
-
-hand.on('pan:mod', { modifierName: 'resize' }, resizeSelection);
-hand.on('swipe:right', { combo: 'alt+meta' }, duplicateToNext);
-```
-
-Named combos label anchor/action modifier gestures such as `tap:mod` and `pan:mod`. Finger substitute roles change effective finger count for ordinary gestures, such as `hand.on('tap', { fingers: 2 }, fn)` or `hand.on('swipe:left', { fingers: 3 }, fn)`. Modified swipe/pinch/rotate handlers use `swipe:mod`, `pinch:mod`, and `rotate:mod`; add `combo` or `keys` criteria when the exact keyboard modifier matters.
-
-Keep the three keyboard jobs separate when configuring roles:
-
-- `modifier` is context for `tap:mod` and `pan:mod`.
-- `twoFingers`, `threeFingers`, and `fourFingers` substitute effective finger count.
-- `rollingTap` turns a short directional click chain into keyboard rolling.
+Disable a role by setting it to `null` or `false`:
 
 ```js
 const hand = new HandTrick(surface, {
@@ -924,303 +1162,530 @@ const hand = new HandTrick(surface, {
 });
 ```
 
-Disables specific keyboard roles so those combos return to normal browser/app meaning.
+Keep the jobs separate:
 
-## Intent And Activation
+- `modifier` labels modifier gestures such as `tap:mod` and `pan:mod`.
+- `twoFingers`, `threeFingers`, and `fourFingers` substitute effective finger count for ordinary gestures.
+- `rollingTap` turns a short directional click chain into keyboard rolling.
+- `keyboard.combos` assigns names to keyboard modifier gestures.
 
-Recognizer activation comes from two places:
+Modifier criteria:
 
-1. Explicit `intent.events`.
-2. Registered listeners.
+```js
+hand.command('tap:mod', {
+    modifierSource: 'keyboard',
+    modifierName: 'resize',
+    modifierKeys: 'shift+alt'
+}, alternatePick);
+
+hand.command('tap:mod', {
+    modifierRegion: 'top-left',
+    modifierArea: 'edge',
+    modifierFingers: 1,
+    actionFingers: 1,
+    totalFingers: 2
+}, alternatePick);
+```
+
+Modified swipe, pinch, and rotate have their own selector forms:
+
+```js
+hand.command('swipe:mod:right', { combo: 'alt' }, duplicateToNext);
+hand.command('pinch:mod:out', { combo: 'alt' }, zoomSelection);
+hand.command('rotate:mod:cw', { keys: 'shift+meta' }, rotateCopyRight);
+```
+
+`HandTrick.keyCombo()` normalizes exact combo text:
+
+```js
+HandTrick.keyCombo('command+option+shift'); // 'shift+alt+meta'
+```
+
+## Payload
+
+Handlers receive one detail object. Common fields:
+
+| Field | Meaning |
+| --- | --- |
+| `type` | Emitted event type. |
+| `originalEvent` | Native event when available. |
+| `target` | Original target for active input. |
+| `currentTarget` | Element bound to HandTrick. |
+| `instance` | Non-enumerable HandTrick instance. |
+| `pointerType` | `mouse`, `touch`, `pen`, `wheel`, or `none`. |
+| `fingers` | Effective pointer count. |
+| `actualFingers` | Physical active pointer count. |
+| `syntheticFingers` | Keyboard-substituted count, or `0`. |
+| `fingerSource` | `pointer`, `keyboard`, or `none`. |
+| `maxFingers`, `maxActualFingers` | Max effective/physical count seen in session. |
+| `pointers`, `activePointers` | Pointer snapshots. |
+| `changedPointer`, `changedPointers` | Changed pointer snapshots when available. |
+| `actionPointer`, `modifierPointers` | Modifier action/anchor snapshots when relevant. |
+| `center`, `startCenter`, `previousCenter` | Current, phase-start, and previous aggregate positions. |
+| `region`, `startRegion`, `previousRegion` | Position aliases from center snapshots. |
+| `area`, `startArea`, `edge`, `startEdge`, `edgeRegion`, `startEdgeRegion` | Area and edge metadata. |
+| `halfX`, `halfY`, `halfRegion`, `thirdX`, `thirdY` | Coarse position buckets. |
+| `keys`, `keyCombo`, `keyboard`, `keyboardSubstitute` | Keyboard snapshots. |
+| `deltaX`, `deltaY`, `absX`, `absY`, `travel` | Translation from phase start. |
+| `stepX`, `stepY`, `stepDistance`, `stepElapsed` | Last-sample movement. |
+| `velocityX`, `velocityY`, `velocity`, `stepVelocity` | Motion speed in px/ms. |
+| `direction`, `axis`, `speed` | Direction, axis, and swipe speed label when present. |
+| `distance`, `scale`, `rotation`, `angle` | Transform and movement values. |
+| `pressure`, `previousPressure`, `pressureDelta`, `normalizedPressure` | Pressure values. |
+| `confidence`, `confidences` | Recognition confidence scores. |
+| `motion` | Two-pointer motion shape. |
+| `phase` | Runtime/session phase, not listener phase. |
+| `intent` | Commitment/pruning snapshot. |
+| `topology` | Pointer add/remove/max metadata. |
+| `rect` | Target rect used for position metadata. |
+| `claimed`, `consumed`, `releaseGuarded`, `tapHold`, `tapChain` | Ownership and gesture diagnostics. |
+| `preventDefault()` | Prevent native event when possible. |
+| `stopPropagation()` | Stop native event when possible. |
+
+Gesture-specific fields:
+
+| Field | Appears On | Meaning |
+| --- | --- | --- |
+| `tapCount`, `tapSequence` | Tap | Tap count and tap-chain details. |
+| `sequence`, `gestureSequence` | Released sequences, tap chains | Matched gesture list and sequence metadata. |
+| `scale`, `scaleDelta`, `rawScale`, `rawScaleDelta` | Pinch, wheel zoom | Rebased scale and raw diagnostics. |
+| `rotation`, `rawRotation`, `angularVelocity` | Rotate | Rebased signed degrees and angular speed. |
+| `path`, `pathText`, `pathSegments`, `pathDistance` | Path | Direction list/string and segment data. |
+| `matchPattern`, `matchedPathText`, `pathMatched` | Path/circle/arc | Matched pattern and physical matched slice. |
+| `circle`, `circleDirection`, `circleCount` | Circle | Cycle metadata. |
+| `arc`, `arcDirection` | Arc | Arc metadata. |
+| `rolling`, `rollingCount`, `rollingDirection` | Rolling | Source, count, direction, timing, contact order. |
+| `modifier` | Modifier | Source, name, fingers, regions, keys, position breakdown. |
+| `actionDeltaX`, `actionDeltaY`, `actionTravel`, `actionDirection` | Modifier pan | Action pointer movement. |
+| `rawDeltaX`, `rawDeltaY`, `rawDeltaZ`, `deltaMode` | Wheel | Native wheel deltas. |
+| `panAxis` | Pan | Axis lock/dominant axis result. |
+
+Payload invariants:
+
+- `instance` is non-enumerable.
+- Position and pointer fields are snapshots.
+- Gesture-specific fields are additive.
+- Wheel and `input:ignored` can be thinner because they may be emitted outside an active pointer session.
+
+## Options
+
+Constructor forms:
+
+```js
+new HandTrick(target);
+new HandTrick(target, options);
+new HandTrick(target, 'media');
+new HandTrick(target, ['media', { rotate: { enabled: true } }]);
+new HandTrick({ target, input: 'mouse' });
+HandTrick.create(target, options);
+```
+
+Top-level option fields:
+
+```txt
+preset
+presets
+enabled
+input
+touch
+mouse
+pen
+mouseTouchDelay
+buttons
+preventDefault
+stopPropagation
+capture
+windowEvents
+ignore
+clock
+rect
+dom
+intent
+claim
+tap
+tapHold
+press
+pan
+swipe
+pinch
+rotate
+path
+rolling
+modifier
+pressure
+wheel
+edge
+```
+
+### Defaults
+
+All values shown are library defaults before presets.
+
+| Namespace | Important Defaults |
+| --- | --- |
+| top-level | `enabled: true`, `input: 'auto'`, `preventDefault: true`, `stopPropagation: false`, `capture: true`, `windowEvents: true`, `rect: 'session'` |
+| `tap` | `maxTime: 420`, `maxMove: 18`, `interval: 340`, `distance: 80` |
+| `tapHold` | `window: 1200`, `distance: 160`, `maxRestTime: 320` |
+| `press` | `delay: 500`, `move: 14`, `repeat: 0`, `consumesTap: true`, `allowsPan: false` |
+| `pan` | `threshold: 12`, `minTime: 45`, `minSamples: 2`, `fingers: [1]`, `axis: 'free'` |
+| `swipe` | `distance: 80`, `distanceByFingers: { 1: 100, 2: 60, 3: 60, 4: 60 }`, `velocity: 0.25`, `axisRatio: 1.12`, `intentDistance: 50` |
+| `pinch` | `distance: 10`, `scale: 0.03`, `minTime: 70`, `minSamples: 2`, `dominance: 0.35` |
+| `rotate` | `angle: 8`, `minTime: 130`, `minSamples: 3`, `lateAngle: 22`, `minAngularVelocity: 0.035`, `dominance: 0.42`, `confidence: 0.72` |
+| `path` | `fingers: [1]`, `minDistance: 44`, `segmentDistance: 42`, `axisRatio: 1.35`, `turnAngle: 55`, `maxPause: 650`, `maxSegments: 6`, `maxCircleCount: 6`, `consume: 'auto'` |
+| `rolling` | `fingers: [2, 3, 4]`, `minDelay: 10`, `maxDelay: 500`, `keyboardMaxDelay: 500`, `maxHold: 780`, `maxMove: 28`, `minSpan: 24`, `minStep: 10`, `maxGap: 260` |
+| `modifier` | `anchorMove: 10`, `anchorDelay: 180`, `panDelay: 70`, `maxTapTime: 430`, `maxTapMove: 28`, `panThreshold: 12` |
+| `modifier.keyboard` | enabled, native prevention enabled, Shift modifier, Alt 2F, Ctrl 3F, Shift+Meta 4F, Meta rolling |
+| `pressure` | `threshold: 0.01` |
+| `wheel` | `enabled: true`, `preventDefault: false`, `zoomFactor: 0.0015`, `normalize: true`, `lineHeight: 16`, `pageHeight: 800` |
+| `claim` | `enabled: true`, `threshold: 0.58`, `preventDefault: true`, `stopPropagation: false` |
+| `intent` | `history: 12`, `enabled: true`, `prune: true`, `useListeners: true`, `events: null`, `releaseGuard: 180`, `releaseDistance: 34`, `sequenceWindow: 1200`, `sequenceMax: 8` |
+| `dom` | touch/selection/callout guards enabled, `touchAction: 'none'`, `overscrollBehavior: 'contain'` |
+| `edge` | `size: 32` |
+
+### Input And Rect
+
+Input modes:
+
+| Mode | Native routes |
+| --- | --- |
+| `pointer` | Pointer events only. |
+| `touch` | Touch events only. |
+| `mouse` | Mouse events only. |
+| `hybrid` | Touch and mouse. |
+| `auto` | Pointer events when available, else hybrid. |
+
+Rect modes:
+
+| Mode | Behavior |
+| --- | --- |
+| `session` | Cache target rect for the current session. |
+| `live` | Re-read rect when detail is built. |
+| `static` | Cache until `refreshRect()`. |
+
+Use `ignore` for native child controls:
+
+```js
+const hand = new HandTrick(surface, {
+    ignore: target => target && target.closest && target.closest('button,input,textarea,select')
+});
+```
+
+### Intent
+
+Recognizer activation comes from explicit `intent.events` and registered listeners.
 
 Most apps should leave `intent.events` unset:
 
 ```js
 const hand = new HandTrick(surface);
-hand.on('swipe:right', next);
+hand.command('swipe:right', next);
 ```
 
-That listener is enough to activate swipe and keep pruning relevant.
-
-Use explicit `intent.events` only when:
-
-- Commands are registered lazily and recognition must be available before listeners exist.
-- A noisy full-screen surface needs a strict whitelist.
-- You are building an inspector or diagnostic surface.
-
-Manual intent lists are powerful but easy to stale. If `intent.events` omits a family, a valid listener can look broken.
+That listener activates swipe. Use explicit intent lists only when commands are registered lazily, you need a strict whitelist, or you are building an inspector.
 
 ```js
 const hand = new HandTrick(surface, {
-    intent: { events: ['tap', 'swipe:right', 'pinch'] }
+    intent: {
+        events: ['tap', 'tap>tap>swipe:right', 'swipe:right'],
+        sequenceWindow: 900
+    }
 });
 ```
 
-Disable listener-derived pruning only for diagnostic surfaces that need every enabled recognizer considered regardless of registered routes:
+Manual intent lists can become stale. If a valid listener appears broken, check whether `intent.events` omitted that recognizer family.
+
+### DOM Options
+
+`dom` controls target styles and native guards:
+
+```txt
+enabled
+target
+active
+touchAction
+userSelect
+webkitUserSelect
+webkitTouchCallout
+webkitUserDrag
+webkitTapHighlightColor
+selectionGuard
+clearSelection
+tapGuard
+tapGuardDelay
+tapGuardDistance
+overscrollBehavior
+```
+
+String fields may be CSS values or `false` to skip applying that style.
 
 ```js
-const hand = new HandTrick(surface, {
-    intent: { useListeners: false }
+new HandTrick(surface, {
+    dom: {
+        touchAction: 'none',
+        userSelect: 'none',
+        overscrollBehavior: 'contain'
+    }
 });
 ```
 
-`setOptions` merges options or presets, updates explicit recognizer toggles, and rebinds native listeners where needed.
+Disable guards when the target intentionally contains selectable or editable text:
 
-## Ownership And Native Suppression
+```js
+new HandTrick(editor, {
+    dom: {
+        tapGuard: false,
+        selectionGuard: false,
+        touchAction: false,
+        userSelect: false
+    }
+});
+```
+
+## Ownership And Native Input
 
 HandTrick separates native ownership from semantic ownership.
 
 | Mechanism | Purpose | Effect |
 | --- | --- | --- |
-| Claim | Native event ownership. | May call `preventDefault()` / `stopPropagation()` after `claim.threshold`. |
+| `ignore` | Keep native areas outside HandTrick processing. | Ignored input emits `input:ignored`. |
+| Top-level suppression | Default `preventDefault` / `stopPropagation` behavior. | Runs while preparing native events. |
+| `dom` | CSS interaction suppression and guards. | Prevents browser gestures/selection where configured. |
+| Claim | Native event ownership after confidence threshold. | May call `preventDefault()` / `stopPropagation()`. |
 | Consumed | Semantic gesture ownership. | Blocks release fallback such as tap, rolling tap, and swipe unless allowed. |
+| `path.consume` | Path-specific semantic ownership. | Controls path/swipe coexistence. |
 
-Most continuous commands consume once they commit. Pan, pinch, rotate, modifier pan, rolling, and press use consumption to prevent a later release gesture from firing on the same session. Swipe consumes when it emits. Path has separate `path.consume`.
+Most continuous commands consume once they commit. Pan, pinch, rotate, modifier pan, rolling, and press use consumption to prevent later release gestures from firing on the same session. Swipe consumes when it emits. Path uses `path.consume`.
 
-DOM suppression is enabled by default:
+Release guard prevents accidental one-finger gestures immediately after a multi-finger session ends. When one finger lifts later than the other after pinch/rotate, `intent.releaseGuard` and `intent.releaseDistance` suppress stray one-finger movement for a short window.
 
-```js
-new HandTrick(surface, {
-    dom: {
-        enabled: true,
-        selectionGuard: true,
-        tapGuard: true,
-        touchAction: 'none',
-        userSelect: 'none',
-        webkitUserSelect: 'none',
-        webkitTouchCallout: 'none'
-    }
-});
-```
+Tuning guide:
 
-`tapGuard` prevents the second nearby rapid native tap at capture time. This matters for iOS text selection/loupe because clearing selection after WebKit starts the callout is often too late.
-
-Disable guards only when the target intentionally contains selectable or editable text:
-
-```js
-new HandTrick(editor, {
-    dom: { tapGuard: false, selectionGuard: false }
-});
-```
-
-Use `ignore` or separate targets for native islands:
-
-```js
-const hand = new HandTrick(surface, {
-    ignore: '.native-control'
-});
-
-hand.observe('input:ignored', event => {
-    console.log(event.pointerType);
-});
-```
-
-## Tuning
-
-Change the smallest proof that matches the symptom.
-
-| Symptom | First change | Why |
+| Symptom | First Change | Why |
 | --- | --- | --- |
 | Tap misses on mobile | Raise `tap.maxMove`, then `tap.distance`. | Finger landings drift more than mouse clicks. |
 | Double tap too easy | Lower `tap.interval` or `tap.distance`. | Multi-tap chains should stay nearby and recent. |
 | Swipe fires during short drags | Raise `swipe.distanceByFingers[1]` and `swipe.intentDistance`. | Distance is a stronger guard than velocity alone. |
 | Two-finger swipe feels too hard | Lower `swipe.distanceByFingers[2]`, not global `swipe.distance`. | Multi-finger travel is naturally shorter. |
 | Pinch fires during two-finger pan | Raise `pinch.distance` or `pinch.dominance`. | Parallel movement should stay translation. |
-| Rotate fires during pinch | Raise `rotate.angle`, `rotate.confidence`, and `rotate.dominance`. | App commands need more proof than visual rotation previews. |
+| Rotate fires during pinch | Raise `rotate.angle`, `rotate.confidence`, and `rotate.dominance`. | Commands need stronger proof than visual previews. |
 | One-finger swipes stop after adding paths | Use `path.consume: 'auto'`, move paths off one-finger, split surfaces, or raise path thresholds. | Eager paths consume on first segment. |
 | Path commands trigger on shaky swipes | Raise `path.axisRatio`, `path.segmentDistance`, or `path.turnAngle`. | Paths need clean cardinal movement and real turns. |
 | Rolling tap misses | Raise `rolling.maxDelay` slightly before lowering `rolling.minDelay`. | Too-low min delay collides with simultaneous multi-finger taps. |
-| Native scroll leaks through | Keep `dom.touchAction: 'none'` and `claim.preventDefault: true`. | Browser gestures must be stopped before semantic gestures commit. |
-
-Avoid lowering `minTime` and `minSamples` together unless the app owns the whole surface and false positives are acceptable.
+| Native scroll leaks through | Keep `dom.touchAction: 'none'` and `claim.preventDefault: true`. | Browser gestures must be stopped early. |
 
 Tune distance before velocity. Distance thresholds usually remove accidental gestures without making deliberate slow input feel broken.
 
-## API
+## API Reference
 
-### Constructor
+### Static
 
 ```js
-new HandTrick(target, options);
-new HandTrick(target, 'media');
-new HandTrick({ target, preset: 'media' });
+HandTrick.events
+HandTrick.recognizers
+HandTrick.families
+HandTrick.groups
+HandTrick.presets
+HandTrick.defaults
+HandTrick.create(target, options)
+HandTrick.preset(nameOrInput, overrides)
+HandTrick.region(pointOrEvent, region)
+HandTrick.zone(point, { rows, cols })
+HandTrick.matches(detail, criteria)
+HandTrick.keyCombo(value)
+HandTrick.path(value)
+HandTrick.event(value)
+HandTrick.isEvent(value)
 ```
 
-### Instance Methods
+| Helper | Returns |
+| --- | --- |
+| `HandTrick.defaults` | Deep copy of default options. |
+| `HandTrick.events` | Finite event registry. |
+| `HandTrick.recognizers` | Option-backed recognizer names. |
+| `HandTrick.families` | Emitted event families. |
+| `HandTrick.groups` | Event group map. |
+| `HandTrick.presets` | Named preset builders. |
+| `HandTrick.create(target, options)` | New instance. |
+| `HandTrick.preset(name, overrides)` | Resolved partial options. |
+| `HandTrick.region(pointOrEvent, region)` | Boolean region match. |
+| `HandTrick.zone(point, { rows, cols })` | `{ row, col, rows, cols, index }`. |
+| `HandTrick.matches(detail, criteria)` | Boolean criteria match. |
+| `HandTrick.keyCombo(value)` | Canonical combo string. |
+| `HandTrick.path(value)` | Canonical path pattern or empty string. |
+| `HandTrick.event(value)` | Canonical selector or empty string. |
+| `HandTrick.isEvent(value)` | Boolean selector validity. |
 
-| Method | Description | Example |
-| --- | --- | --- |
-| `on(type, handler)` | Listen for event, wildcard `*`, sequence, or bare path chain. | `hand.on('swipe:left', previous)` |
-| `on(type, criteria, handler)` | Conditional listener using `HandTrick.matches`. | `hand.on('tap:2x', { region: 'right' }, next)` |
-| `once(type, handler)` / `once(type, criteria, handler)` | Listen once. | `hand.once('press', openMenu)` |
-| `off(type?, handler?)` | Remove listeners. | `hand.off('swipe:left', previous)` |
-| `command(type, criteria?, handler)` | Register exclusive command-phase handler. | `hand.command('tap>swipe:right', skipIntro)` |
-| `observe(type, criteria?, handler)` | Register additive telemetry. | `hand.observe('path', drawPreview)` |
-| `setOptions(options)` | Merge options or preset at runtime. | `hand.setOptions({ swipe: { velocity: 0.18 } })` |
-| `enable()` / `disable()` | Toggle monitoring and DOM suppression. `disable` cancels active session. | `hand.disable()` |
-| `cancel(reason?, extra?)` | Cancel active session. | `hand.cancel('modal')` |
-| `resetTaps()` | Clear tap-chain memory. | `hand.resetTaps()` |
-| `resetSequences()` | Clear released sequence memory and pending exclusive events. | `hand.resetSequences()` |
-| `reset(options?)` | Reset `taps` or released `sequences`. | `hand.reset({ sequences: true })` |
-| `refreshRect()` | Clear cached rect data. | `hand.refreshRect()` |
-| `getState()` | Inspect runtime state. | `hand.getState().active` |
-| `getIntentState()` | Inspect pruning state. | `hand.getIntentState().groups` |
-| `destroy()` | Remove listeners, restore styles, clear state. Safe to call twice. | `hand.destroy()` |
+No current static `gestures` or `commonEvents` contract exists.
 
-### Static Helpers
+### Instance
 
-| Helper | Description | Example |
-| --- | --- | --- |
-| `HandTrick.create(target, options)` | Factory method. | `HandTrick.create(surface, 'media')` |
-| `HandTrick.preset(name, overrides?)` | Return config object. | `HandTrick.preset('map', { rotate: { angle: 20 } })` |
-| `HandTrick.defaults` | Deep copy of defaults. | `HandTrick.defaults.tap.interval` |
-| `HandTrick.events` | Full finite event registry. Path strings, sequences, and counted circles remain open grammar. | `HandTrick.events.includes('pinch')` |
-| `HandTrick.event(value)` | Canonicalize a selector or return empty for invalid input. | `HandTrick.event('swipe:left')` |
-| `HandTrick.isEvent(value)` | Check selector validity. | `HandTrick.isEvent('circle:cw')` |
-| `HandTrick.recognizers` | Option-backed recognizers. | `HandTrick.recognizers.includes('path')` |
-| `HandTrick.families` | Emitted event families. | `HandTrick.families.includes('arc')` |
-| `HandTrick.groups` | Event groups. | `HandTrick.groups.swipe` |
-| `HandTrick.matches(detail, criteria)` | Criteria matcher. | `HandTrick.matches(event, { region: 'edge' })` |
-| `HandTrick.region(pointOrEvent, region)` | Region matcher. | `HandTrick.region(event, ['left', 'edge'])` |
-| `HandTrick.zone(point, { rows, cols })` | Custom grid helper. | `HandTrick.zone(event.center, { rows: 4, cols: 4 })` |
-| `HandTrick.keyCombo(value)` | Normalize keyboard combo strings. | `HandTrick.keyCombo('command+shift')` |
-| `HandTrick.path(value)` | Normalize path definitions, including circle and arc atoms. Invalid prefixed paths return empty. | `HandTrick.path(['right', 'arc:down'])` |
+```js
+const hand = new HandTrick(target, options);
+```
 
-Type declarations accept `EventName | string` because paths and sequences are open strings. The known-name union is autocomplete, not validation. `HandTrick.events` is a finite registry, not the full grammar; use `HandTrick.isEvent(value)` or `HandTrick.path(value)` when a tool needs runtime validation.
+State fields:
 
-Use `recognizers` when deciding which option block can be enabled or tuned. Use `families` or `groups` when deciding which emitted event bucket to show in tools.
+```js
+hand.target
+hand.enabled
+hand.destroyed
+```
 
-## Configuration
+Methods:
 
-All values shown are library defaults. Presets override subsets.
-
-| Namespace | Key options | Defaults | Example override |
-| --- | --- | --- | --- |
-| top-level | `enabled`, `input`, `preventDefault`, `stopPropagation`, `capture`, `windowEvents`, `ignore`, `rect` | `true`, `auto`, `true`, `false`, `true`, `true`, `null`, `session` | `{ input: 'pointer', ignore: '.native' }` |
-| `tap` | `maxTime`, `maxMove`, `interval`, `distance` | `420`, `18`, `340`, `80` | `{ tap: { interval: 280 } }` |
-| `tapHold` | `window`, `distance`, `maxRestTime` | `1200`, `160`, `320` | `{ tapHold: { window: 900 } }` |
-| `press` | `delay`, `move`, `repeat`, `consumesTap`, `allowsPan` | `500`, `14`, `0`, `true`, `false` | `{ press: { repeat: 300 } }` |
-| `pan` | `threshold`, `minTime`, `minSamples`, `fingers`, `axis`, `canStart` | `12`, `45`, `2`, `[1]`, `free`, `null` | `{ pan: { fingers: [1, 2], axis: 'dominant' } }` |
-| `swipe` | `distance`, `distanceByFingers`, `velocity`, `axisRatio`, `intentDistance`, `allowAfterPan` | `80`, `{1:100,2:60,3:60,4:60}`, `0.25`, `1.12`, `50`, `true` | `{ swipe: { velocity: 0.18 } }` |
-| `pinch` | `distance`, `scale`, `minTime`, `minSamples`, `dominance` | `10`, `0.03`, `70`, `2`, `0.35` | `{ pinch: { scale: 0.05 } }` |
-| `rotate` | `angle`, `minTime`, `minSamples`, `minAngularVelocity`, `dominance`, `confidence` | `8`, `130`, `3`, `0.035`, `0.42`, `0.72` | `{ rotate: { angle: 24, confidence: 1 } }` |
-| `path` | `fingers`, `minDistance`, `segmentDistance`, `axisRatio`, `turnAngle`, `maxPause`, `maxSegments`, `maxCircleCount`, `consume` | `[1]`, `44`, `42`, `1.35`, `55`, `650`, `6`, `6`, `auto` | `{ path: { consume: 'eager' } }` |
-| `rolling` | `fingers`, `minDelay`, `maxDelay`, `keyboardMaxDelay`, `maxHold`, `maxMove`, `minSpan`, `minStep`, `maxGap` | `[2,3,4]`, `10`, `500`, `500`, `780`, `28`, `24`, `10`, `260`; 3F/4F bounds wider | `{ rolling: { maxDelay: 560 } }` |
-| `modifier` | `anchorMove`, `anchorDelay`, `panDelay`, `maxTapTime`, `maxTapMove`, `panThreshold` | `10`, `180`, `70`, `430`, `28`, `12` | `{ modifier: { anchorDelay: 120 } }` |
-| `modifier.keyboard` | `enabled`, `preventNative`, `roles`, `combos` | Shift modifier, Alt/Ctrl fingers, Shift+Meta 4F, Meta rolling | `{ modifier: { keyboard: { roles: { twoFingers: 'alt' } } } }` |
-| `claim` | `enabled`, `threshold`, `preventDefault`, `stopPropagation` | `true`, `0.58`, `true`, `false` | `{ claim: { threshold: 0.7 } }` |
-| `dom` | `touchAction`, `tapGuard`, `selectionGuard`, `overscrollBehavior` | `none`, `true`, `true`, `contain` | `{ dom: { tapGuard: false } }` |
-| `intent` | `events`, `useListeners`, `fastPath`, `releaseGuard`, `releaseDistance`, `sequenceWindow`, `sequenceMax` | `null`, `true`, `true`, `180`, `34`, `1200`, `8` | `{ intent: { events: ['tap', 'swipe:right'] } }` |
-| `wheel` | `enabled`, `preventDefault`, `zoomFactor`, `normalize`, `lineHeight`, `pageHeight` | `true`, `false`, `0.0015`, `true`, `16`, `800` | `{ wheel: { preventDefault: true } }` |
-| `pressure` | `enabled`, `threshold` | `true`, `0.01` | `{ pressure: { threshold: 0.004 } }` |
-| `edge` | `size` | `32` | `{ edge: { size: 44 } }` |
+| Method | Meaning |
+| --- | --- |
+| `on(type, handler, options)` | Register default-phase listener. |
+| `on(type, criteria, handler, options)` | Register filtered default-phase listener. |
+| `once(type, handler, options)` | Register one-shot listener. |
+| `once(type, criteria, handler, options)` | Register filtered one-shot listener. |
+| `off(type, handler)` | Remove one handler for a type. |
+| `off(type)` | Remove listeners for a type. |
+| `off()` | Remove all listeners. |
+| `command(type, handler)` | Register command-phase listener. |
+| `command(type, criteria, handler)` | Register filtered command listener. |
+| `observe(type, handler)` | Register observe-phase listener. |
+| `observe(type, criteria, handler)` | Register filtered observe listener. |
+| `setOptions(options)` | Merge options/presets, update toggles, rebind native listeners when needed. |
+| `enable()` | Enable runtime and apply target styles. |
+| `disable()` | Disable runtime, cancel active session, release target styles. |
+| `cancel(reason, extra)` | Cancel active session. |
+| `resetTaps()` | Clear tap chain memory. |
+| `resetSequences()` | Clear released sequence memory and pending direct emits. |
+| `reset(options)` | Reset taps and/or sequences. |
+| `refreshRect()` | Clear cached rect data. |
+| `getState()` | Runtime state snapshot. |
+| `getIntentState()` | Intent/pruning state snapshot. |
+| `destroy()` | Unbind, restore styles, clear state. Safe to call twice. |
 
 ## Recipes
 
-Media player with tap zones, pinch, and guarded rotate:
+### Media Tap Zones
 
 ```js
-const hand = new HandTrick(surface, ['media', {
-    rotate: { enabled: true, angle: 32, minTime: 220, minSamples: 5, confidence: 1.05 }
-}]);
+const hand = new HandTrick(video, 'media');
 
-hand.on('tap', { region: 'left', tapCount: 2 }, previous);
-hand.on('tap', { region: 'right', tapCount: 2 }, next);
-hand.on('pinch', event => zoom(event.scale));
-hand.on('rotate:cw', event => rotate90(1, event.rawRotation));
-hand.on('rotate:ccw', event => rotate90(-1, event.rawRotation));
+hand.command('tap', { region: 'left' }, previous);
+hand.command('tap', { region: 'center' }, togglePlay);
+hand.command('tap', { region: 'right' }, next);
+hand.command('tap:2x', { region: 'left' }, rewind);
+hand.command('tap:2x', { region: 'right' }, forward);
+hand.command('swipe:up', { startRegion: 'bottom' }, showControls);
 ```
 
-Exclusive sequence:
+### Same-Side Double Tap
 
 ```js
-const hand = new HandTrick(surface);
-
-hand.on('tap:2x', nextMedia);
-hand.on('tap>tap>swipe', seekAhead);
-hand.on('tap:2x>swipe', seekAhead);
+hand.command('tap:2x', {
+    grid: { rows: 3, cols: 3, col: 2 },
+    tapStartGrid: { rows: 3, cols: 3, col: 2 }
+}, rightSideDouble);
 ```
 
-If the user performs `tap>tap>swipe`, only `seekAhead` fires. If the user stops at the second tap, `tap:2x` can still fire after the sequence window closes.
-
-Desktop multi-finger testing:
+### Path With Preview
 
 ```js
-hand.on('tap', { fingers: 2 }, toggleFit);
-hand.on('swipe', { fingers: 2, fingerSource: 'keyboard' }, changeFolder);
+hand.observe('path', { path: 'down>right' }, preview);
+hand.command('down>right', commit);
 ```
 
-Path plus swipe on one surface:
-
-```js
-const hand = new HandTrick(surface, {
-    path: { consume: 'auto' },
-    swipe: { enabled: true }
-});
-
-hand.on('right>down', openTools);
-hand.on('swipe:right', nextItem);
-```
-
-Wheel zoom:
+### Wheel Zoom
 
 ```js
 const hand = new HandTrick(surface, ['viewer', {
     wheel: { preventDefault: true, zoomFactor: 0.0015 }
 }]);
 
-hand.on('wheel:zoom', event => {
+hand.command('wheel:zoom', event => {
     scale = clamp(scale * event.scale, 0.35, 4);
 });
 ```
 
+### Desktop Multi-Finger Routes
+
+```js
+hand.command('tap', { fingers: 2 }, toggleFit);
+hand.command('swipe:left', { fingers: 3, fingerSource: 'keyboard' }, previousGroup);
+```
+
+### Modifier Tap From Top Left
+
+```js
+hand.command('tap:mod', {
+    modifierRegion: 'top-left',
+    modifierArea: 'edge',
+    modifierFingers: 1,
+    actionFingers: 1,
+    totalFingers: 2
+}, alternatePick);
+```
+
+### Sequence With First-Step Criteria
+
+```js
+hand.command('tap>swipe:left', {
+    sequence: [
+        {
+            fingers: 3,
+            fingerSource: 'keyboard',
+            keyboardRole: 'threeFingers'
+        }
+    ]
+}, command);
+```
+
 ## Examples
 
-| # | File | Focus |
-| --- | --- | --- |
-| 01 | [basic.html](examples/basic.html) | Tap, swipe, pinch, rotate, region, source. |
-| 02 | [media.html](examples/media.html) | Media preset, tap zones, tap-hold pan, swipe, pinch, rotate override. |
-| 03 | [regions.html](examples/regions.html) | 3x3 zones, halves, custom grid lookup, start-region routing. |
-| 04 | [keyboard.html](examples/keyboard.html) | Alt/Ctrl/Shift+Meta roles, Meta rolling, Shift modifier drag. |
-| 05 | [module.html](examples/module.html) | Direct ESM import and local/CDN module split. |
-| 06 | [rolling.html](examples/rolling.html) | Rolling tap versus simultaneous multi-finger tap. |
-| 07 | [sequences.html](examples/sequences.html) | Exclusive released gesture sequences. |
-| 08 | [path.html](examples/path.html) | Bare path commands, two-finger paths, circle and arc paths, criteria, longer-path precedence. |
-| 09 | [rotate.html](examples/rotate.html) | Rebased two-finger rotate. |
-| 10 | [wheel.html](examples/wheel.html) | Normalized wheel zoom. |
-| 11 | [thresholds.html](examples/thresholds.html) | Live threshold tuning. |
-| 12 | [router.html](examples/router.html) | Runtime selector, method, and criteria routing. |
-| 13 | [advanced.html](examples/advanced.html) | Combined routing for modifier, path, wheel, rotate, regions, rolling, sequences. |
-| 14 | [Inspector Workbench](inspector/index.html) | Event stream, payload inspection, event toggles, live tuning, router panel. |
+The example hub is [examples/index.html](examples/index.html).
 
-The [example hub](examples/index.html) links the examples in learning order. The [inspector workbench](inspector/index.html) is useful when debugging payloads, registered event families, and selector-plus-criteria routing without switching pages.
+| File | Focus |
+| --- | --- |
+| [basic.html](examples/basic.html) | Tap, swipe, pinch, rotate, region, source. |
+| [media.html](examples/media.html) | Media preset, tap zones, tap-hold pan, swipe, pinch, rotate override. |
+| [regions.html](examples/regions.html) | 3x3 zones, halves, custom grid lookup, start-region routing. |
+| [keyboard.html](examples/keyboard.html) | Alt/Ctrl/Shift+Meta roles, Meta rolling, Shift modifier drag. |
+| [module.html](examples/module.html) | Direct ESM import and local/CDN module split. |
+| [rolling.html](examples/rolling.html) | Rolling tap versus simultaneous multi-finger tap. |
+| [sequences.html](examples/sequences.html) | Exclusive released gesture sequences. |
+| [path.html](examples/path.html) | Bare path commands, two-finger paths, circle and arc paths, path criteria. |
+| [rotate.html](examples/rotate.html) | Rebased two-finger rotate. |
+| [wheel.html](examples/wheel.html) | Normalized wheel zoom. |
+| [thresholds.html](examples/thresholds.html) | Live threshold tuning. |
+| [router.html](examples/router.html) | Runtime selector, method, and criteria routing. |
+| [advanced.html](examples/advanced.html) | Combined routing for modifier, path, wheel, rotate, regions, rolling, sequences. |
+| [inspector/index.html](inspector/index.html) | Event stream, payload inspection, event toggles, live tuning, router panel. |
 
-Most examples use the UMD/global entry `../handtrick.js`. [module.html](examples/module.html) and the inspector use `../handtrick.mjs`. Published direct-module CDN pages should use `handtrick.min.mjs`.
+Most examples use `../handtrick.js`. Module examples use `../handtrick.mjs`. Published CDN module pages should use `handtrick.min.mjs`.
 
-## Build And Test
+## Development
+
+Consumer runtime has no dependencies. Local package scripts require Node `>=24` as declared in `package.json`.
+
+Common checks:
 
 ```sh
 npm test
-npm run build
 npm run test:min
 ```
 
-`npm run build` assembles `src/` into `handtrick.js` and `handtrick.mjs`, then writes `handtrick.min.js` and `handtrick.min.mjs` from the same source graph. ESM entries export directly and do not load or write a global. Terser is a dev dependency only.
+Build command for maintainers:
 
-Coverage includes:
+```sh
+npm run build
+```
 
-- Runtime exports, CommonJS, direct ESM entry, minified parity, package metadata sync.
-- Tap chains, open-ended tap aliases, multi-finger taps, distance breaks, interval breaks, tap-hold continuity.
-- Exclusive sequence dispatch, aggregate tap alias expansion, longest match, direction specificity, explicit tap atoms, and no colon/prefixed legacy syntax.
-- Rolling tap positives and negatives: timing, span/step proof, overlap diagnostics, movement slop, simultaneous contacts, count aliases, Meta keyboard rolling.
-- Keyboard modifier combos, keyboard finger substitution, exact combo matching, disabled roles, listener-driven preset activation.
-- Pan gates, axis locks, tap-hold pan, release guard behavior, staggered multi-finger release.
-- Swipe direction aliases, speed criteria, pruning, and direct-handler suppression when a longer sequence wins.
-- Pinch continuity, parallel-translation rejection, rotate proof, rotate noise rejection, activation rebasing.
-- Bare path listeners, path criteria longest-match arbitration, wrong-turn negatives, pause breaks, grid metadata.
-- Wheel normalization, wheel zoom, ignored wheel events, pressure changes, DOM suppression, iOS tap guard, style restoration, destroy cleanup.
+`npm run build` assembles `src/` into `handtrick.js` and `handtrick.mjs`, then writes `handtrick.min.js` and `handtrick.min.mjs` from the same source graph.
 
-Contributor internals live in [CONTRIBUTING.md](CONTRIBUTING.md). Runtime architecture lives in [ARCHITECTURE.md](ARCHITECTURE.md).
+When changing public behavior, keep these in sync:
+
+- `src/`
+- generated runtimes
+- `index.d.ts`
+- examples
+- tests
+- README/docs
+
+Contributor workflow lives in [CONTRIBUTING.md](CONTRIBUTING.md). Runtime internals live in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Author
 

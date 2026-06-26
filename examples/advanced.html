@@ -114,8 +114,9 @@ hand.on('tap', { fingers: 3 }, event => {
     write(event, 'reset');
 });
 hand.on('tap', { fingers: 4 }, event => write(event, '4f'));
+hand.on('tap:2x', { grid: { rows: 3, cols: 3, current: 'right', tapStart: 'left' } }, event => write(event, 'cross grid'));
 hand.on('tap>tap>swipe:right', event => write(event, 'sequence'));
-hand.on('swipe:up', { startRegion: 'bottom' }, event => write(event, 'bottom-up'));
+hand.on('swipe:up', { region: { start: 'bottom', current: 'top' } }, event => write(event, 'bottom-up'));
 hand.on('swipe', { fingers: 2 }, event => write(event, '2f swipe'));
 hand.on('swipe:mod:right', event => write(event, 'mod swipe'));
 hand.on('left>down', event => write(event, 'path L-D'));

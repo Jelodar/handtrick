@@ -37,6 +37,14 @@ hand.on('tap', event => {
 hand.on('swipe:up', { startRegion: 'bottom' }, () => {
     write('bottom-up swipe');
 });
+
+hand.on('swipe:right', { region: { start: 'left', current: 'right' } }, () => {
+    write('left-to-right swipe');
+});
+
+hand.on('tap:2x', { grid: { rows: 3, cols: 3, current: 'right', tapStart: 'left' } }, () => {
+    write('left-to-right double tap');
+});
 </script>
 </body>
 </html>

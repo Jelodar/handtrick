@@ -121,19 +121,18 @@ HandTrick.path = function (value) {
 HandTrick.matches = function (event, criteria) {
     if (!event) return false;
     if (criteria === undefined || criteria === null) return true;
-    if (!criteriaKeysKnown(criteria, criteriaKeys)) return false;
-    const opt = criteria;
+    const opt = normalizeCriteria(criteria);
+    if (isInvalidCriteria(opt)) return false;
+    if (!opt) return true;
     const modifier = event.modifier || null;
     const modifierPoint = modifier && modifier.position ? modifier.position.source : null;
     const tapStart = tapStartPoint(event);
-    const sequenceStart = event && event.gestureSequence && event.gestureSequence.gestures[0];
     if (opt.region && !HandTrick.region(event, opt.region)) return false;
     if (opt.startRegion && !HandTrick.region(event && event.startCenter, opt.startRegion)) return false;
     if (opt.tapStartRegion && !HandTrick.region(tapStart, opt.tapStartRegion)) return false;
     if (opt.grid && !gridMatches(event && event.center, opt.grid)) return false;
     if (opt.startGrid && !gridMatches(event && event.startCenter, opt.startGrid)) return false;
     if (opt.tapStartGrid && !gridMatches(tapStart, opt.tapStartGrid)) return false;
-    if (opt.sequenceStartGrid && !gridMatches(sequenceStart && sequenceStart.center, opt.sequenceStartGrid)) return false;
     if (opt.sequence && !sequenceCriteriaMatches(event, opt.sequence)) return false;
     if (opt.area && !matchValue(event.area, opt.area)) return false;
     if (opt.startArea && !matchValue(event.startArea, opt.startArea)) return false;

@@ -49,7 +49,7 @@ listenerArgs(type, criteria, handler, options) {
     }
     if (typeof handler !== 'function') throw new TypeError('HandTrick handler must be a function');
     type = normalizeEventType(type);
-    criteria = criteria || null;
+    criteria = normalizeCriteria(criteria || null);
     const sequence = isSequencePatternEvent(type) ? parseSequenceSelector(type) : null;
     const parsed = sequence ? null : parseEventSelector(type);
     return {

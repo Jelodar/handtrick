@@ -321,7 +321,7 @@ Swipe, pinch, and rotate modifier forms are separate command types. Modified pay
 
 ## Criteria Matching
 
-Criteria values normalize before comparison. Position criteria check current, start, tap-start, sequence-start, modifier, grid, edge, area, region, and path values. Gesture criteria check direction, axis, fingers, source, keyboard role, pointer type, tap count, sequence steps, and modifier metadata. Unknown criteria keys fail closed so typoed handlers do not broaden.
+Criteria values normalize before comparison and before listener records are stored. Position criteria check current, start, tap-start, sequence-start, modifier, grid, edge, area, region, and path values. Gesture criteria check direction, axis, fingers, source, keyboard role, pointer type, tap count, sequence steps, and modifier metadata. Unknown criteria keys fail closed so typoed handlers do not broaden.
 
 Criteria matching must stay side-effect free. A handler either becomes eligible or is skipped; criteria must not mutate session state.
 
